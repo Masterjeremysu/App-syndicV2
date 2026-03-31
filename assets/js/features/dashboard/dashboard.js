@@ -59,6 +59,7 @@ async function renderDashboard() {
             Nouveau signalement
           </button>
           <button class="btn btn-secondary" onclick="nav('tickets')">Voir les signalements</button>
+          <button class="btn btn-ghost" onclick="nav('faq')" title="FAQ, raccourcis et aide">❓ FAQ</button>
         </div>
       </div>
     </section>
