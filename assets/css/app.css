@@ -837,6 +837,175 @@ body {
   background: var(--surface);
   border-color: var(--border);
 }
+
+/* ══════════════════════════════ ANNONCES (ann2) ══════════════════════════════ */
+.ann2-page { max-width: 720px; margin: 0 auto; padding: 8px 0 72px; animation: pageIn .28s ease both; }
+.ann2-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; margin-bottom: 18px; flex-wrap: wrap;
+}
+.ann2-head-text h1 {
+  font-family: var(--font-head); font-size: 24px; font-weight: 800;
+  letter-spacing: -.4px; margin: 0 0 6px;
+}
+.ann2-head-text p { margin: 0; font-size: 13px; color: var(--text-2); max-width: 440px; line-height: 1.5; }
+
+.ann2-tabs {
+  display: flex; gap: 4px; padding: 4px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 14px; margin-bottom: 14px; width: fit-content;
+}
+.ann2-tab {
+  border: none; background: transparent; cursor: pointer;
+  font-family: var(--font-body); font-size: 13px; font-weight: 700;
+  color: var(--text-3); padding: 8px 16px; border-radius: 10px;
+  transition: color .12s, background .12s, box-shadow .12s;
+}
+.ann2-tab:hover { color: var(--text); }
+.ann2-tab.active {
+  background: var(--surface); color: var(--accent);
+  box-shadow: 0 2px 10px rgba(0,0,0,.08);
+}
+
+.ann2-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 10px 12px; margin-bottom: 18px;
+}
+.ann2-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+.ann2-chip {
+  border: 1px solid var(--border); background: var(--surface);
+  border-radius: 999px; padding: 7px 12px; font-size: 12px; font-weight: 600;
+  color: var(--text-2); cursor: pointer; font-family: var(--font-body);
+  transition: all .12s;
+}
+.ann2-chip:hover { border-color: var(--border-strong); color: var(--text); }
+.ann2-chip.active {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+  box-shadow: 0 6px 16px rgba(37,99,235,.22);
+}
+.ann2-search { max-width: 220px; flex-shrink: 0; }
+
+.ann2-loading { text-align: center; padding: 40px 16px; color: var(--text-3); font-size: 14px; }
+
+.ann2-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 18px 18px 14px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+  transition: border-color .15s, box-shadow .15s;
+  animation: pageIn .22s ease both;
+}
+.ann2-card:hover { border-color: var(--border-strong); }
+.ann2-card.ann2-epingle {
+  border-color: rgba(37,99,235,.35);
+  box-shadow: 0 8px 28px rgba(37,99,235,.12);
+}
+.ann2-card.ann2-is-draft { opacity: .94; border-style: dashed; }
+
+.ann2-type-urgent { border-left: 4px solid var(--red); }
+.ann2-type-important { border-left: 4px solid var(--orange); }
+.ann2-type-info { border-left: 4px solid var(--accent); }
+
+.ann2-card-top { display: flex; gap: 14px; align-items: flex-start; }
+.ann2-card-ico { font-size: 28px; line-height: 1; flex-shrink: 0; }
+.ann2-card-main { flex: 1; min-width: 0; }
+.ann2-card-titre-row {
+  display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.ann2-card-titre {
+  font-size: 17px; font-weight: 800; margin: 0; line-height: 1.25;
+  font-family: var(--font-head); flex: 1; min-width: 0;
+}
+
+.ann2-badge-type {
+  font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px;
+  white-space: nowrap;
+}
+.ann2-badge-type.urgent { background: var(--red-light); color: var(--red); }
+.ann2-badge-type.important { background: var(--orange-light); color: var(--orange); }
+.ann2-badge-type.info { background: var(--accent-light); color: var(--accent); }
+
+.ann2-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+  font-size: 12px; color: var(--text-3);
+}
+.ann2-meta-dot { opacity: .5; }
+
+.ann2-tag {
+  font-size: 10px; font-weight: 800; letter-spacing: .04em;
+  padding: 3px 8px; border-radius: 6px; text-transform: uppercase;
+}
+.ann2-tag-draft { background: var(--surface-2); color: var(--text-3); border: 1px solid var(--border); }
+.ann2-tag-public { background: var(--green-light); color: var(--green); }
+.ann2-tag-restricted { background: rgba(124,58,237,.12); color: var(--violet); }
+
+.ann2-body { margin-top: 12px; }
+.ann2-body-inner {
+  font-size: 14px; line-height: 1.65; color: var(--text-2);
+  white-space: pre-wrap; word-break: break-word;
+}
+.ann2-body.ann2-body-collapsed .ann2-body-inner {
+  max-height: 5.15em;
+  overflow: hidden;
+  position: relative;
+}
+.ann2-body.ann2-body-collapsed .ann2-body-inner::after {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0; height: 2em;
+  background: linear-gradient(transparent, var(--surface));
+}
+.ann2-toggle { margin-top: 6px; }
+
+.ann2-actions {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px;
+  padding-top: 12px; border-top: 1px solid var(--border);
+}
+
+.ann2-modal .mb { max-height: min(70vh, 520px); overflow-y: auto; }
+.ann2-vis-box {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 12px;
+}
+.ann2-role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px; margin-top: 6px;
+}
+.ann2-role-label {
+  display: flex; align-items: center; gap: 8px; font-size: 13px;
+  cursor: pointer; color: var(--text);
+}
+.ann2-presets {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-top: 12px; padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.ann2-presets-label {
+  font-size: 11px; font-weight: 800; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.ann2-check {
+  display: flex; align-items: center; gap: 8px; font-size: 13px;
+  cursor: pointer; color: var(--text-2);
+}
+.ann2-check input { accent-color: var(--accent); }
+
+@media (max-width: 560px) {
+  .ann2-head { flex-direction: column; }
+  .ann2-search { max-width: none; width: 100%; }
+  .ann2-chip { padding: 6px 10px; font-size: 11px; }
+}
+
+[data-theme="dark"] .ann2-card.ann2-epingle {
+  box-shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+[data-theme="dark"] .ann2-body.ann2-body-collapsed .ann2-body-inner::after {
+  background: linear-gradient(transparent, var(--surface));
+}
+
 .dash2-zone-name {
   width: 82px;
   flex-shrink: 0;
