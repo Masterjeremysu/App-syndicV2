@@ -447,9 +447,10 @@ async function loadDashboardWidgets() {
     });
   }
   // Widget annonces
-  const { data: anns } = await sb.from('annonces')
+  const { data: annsRaw } = await sb.from('annonces')
     .select('*').order('epingle', { ascending: false })
-    .order('created_at', { ascending: false }).limit(3);
+    .order('created_at', { ascending: false }).limit(12);
+  const anns = (annsRaw || []).filter(a => annonceReaderCanSee(a)).slice(0, 3);
   const annEl = $('dash-annonces-list');
   if (annEl) {
     if (!anns?.length) {
