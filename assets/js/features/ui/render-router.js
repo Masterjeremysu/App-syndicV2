@@ -29,4 +29,5 @@ function renderPage(p) {
   else if (p === 'contacts') renderContacts();
   else if (p === 'documents') renderDocuments();
   else if (p === 'votes') renderVotes();
+  else if (p === 'faq') renderFAQ();
 }
