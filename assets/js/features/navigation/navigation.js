@@ -30,7 +30,8 @@ function nav(page, noClose) {
     contrats:'Contrats', cles:'Clés', journal:'Journal', users:'Utilisateurs',
     rapport:'Rapport syndic', notifications:'Notifications', profile:'Mon profil',
     messages:'Messages', annonces:'Annonces', agenda:'Agenda',
-    contacts:'Contacts & Urgences', documents:'Documents', votes:'Votes & Sondages'
+    contacts:'Contacts & Urgences', documents:'Documents', votes:'Votes & Sondages',
+    faq:'FAQ'
   };
   $('topbar-title').textContent = titles[page] || page;
   renderPage(page);
