@@ -137,6 +137,96 @@ function isSyndicOrAdmin() {
   return profile && ['administrateur', 'syndic'].includes(profile.role);
 }
 
+/** Publication / édition d'annonces (conseil syndical, admin, syndic). */
+function canManageAnnonces() {
+  return isManager() || isSyndicOrAdmin();
+}
+
+function normalizeAnnonceRoles(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  if (typeof raw === 'string') {
+    try {
+      const j = JSON.parse(raw);
+      return Array.isArray(j) ? j.filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/** Ancienne colonne prod : `visible_pour` ('tous' | 'managers') comme pour les documents. */
+function annonceEffectiveVisibility(a) {
+  if (!a) return { mode: 'public', roles: [] };
+  if (a.visibility_mode === 'public' || a.visibility_mode === 'roles') {
+    return {
+      mode: a.visibility_mode,
+      roles: normalizeAnnonceRoles(a.visibility_roles),
+    };
+  }
+  if (a.visible_pour === 'managers') {
+    return {
+      mode: 'roles',
+      roles: ['membre_cs', 'syndic', 'administrateur'],
+    };
+  }
+  return { mode: 'public', roles: [] };
+}
+
+/** Aligner `visible_pour` avec le formulaire (rétro-compat BDD existante). */
+function annonceVisiblePourFromForm(visMode, visRoles) {
+  if (visMode !== 'roles') return 'tous';
+  const r = new Set(visRoles);
+  const gestion = ['membre_cs', 'syndic', 'administrateur'];
+  const gestionOnly = gestion.every(x => r.has(x)) && !r.has('copropriétaire');
+  return gestionOnly ? 'managers' : 'tous';
+}
+
+/**
+ * L'utilisateur courant peut lire cette annonce (hors filtre recherche UI).
+ * Les gestionnaires voient tout y compris brouillons.
+ */
+function annonceReaderCanSee(a) {
+  if (!a || !profile?.role) return false;
+  if (canManageAnnonces()) return true;
+  if (a.brouillon === true || a.brouillon === 'true') return false;
+  const { mode, roles } = annonceEffectiveVisibility(a);
+  if (mode !== 'roles') return true;
+  if (!roles.length) return true;
+  return roles.includes(profile.role);
+}
+
+/** Libellé court pour badges UI (liste, cartes). */
+/** Rôles destinataires pour notifications / emails (hors brouillon). */
+function annonceTargetRoles(a) {
+  if (!a || a.brouillon === true || a.brouillon === 'true') return [];
+  const { mode, roles } = annonceEffectiveVisibility(a);
+  if (mode !== 'roles') {
+    return ['administrateur', 'syndic', 'membre_cs', 'copropriétaire'];
+  }
+  if (!roles.length) {
+    return ['administrateur', 'syndic', 'membre_cs', 'copropriétaire'];
+  }
+  return roles;
+}
+
+function annonceVisibilityLabel(a) {
+  if (a.brouillon === true || a.brouillon === 'true') {
+    return { text: 'Brouillon', cls: 'ann2-tag ann2-tag-draft' };
+  }
+  const { mode, roles } = annonceEffectiveVisibility(a);
+  if (mode !== 'roles') {
+    return { text: 'Visible · tous', cls: 'ann2-tag ann2-tag-public' };
+  }
+  if (!roles.length) {
+    return { text: 'Visible · tous', cls: 'ann2-tag ann2-tag-public' };
+  }
+  const map = { copropriétaire: 'Résidents', membre_cs: 'CS', syndic: 'Syndic', administrateur: 'Admin' };
+  const short = roles.map(r => map[r] || r).join(' · ');
+  return { text: `Restreint · ${short}`, cls: 'ann2-tag ann2-tag-restricted' };
+}
+
 function toast(msg, type='ok') {
   const t = document.createElement('div');
   t.className = `toast ${type}`;
