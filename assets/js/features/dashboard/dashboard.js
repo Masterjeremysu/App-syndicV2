@@ -1,4 +1,7 @@
 // ── DASHBOARD ──
+let _dashFocusMode = 'tout'; // tout | ouvert | critique | resolu | mine | transmis | zone
+let _dashFocusZone = null; // utilisé si mode === 'zone'
+
 async function renderDashboard() {
   const el = $('page');
 
@@ -22,43 +25,45 @@ async function renderDashboard() {
   const critiques = t.filter(x => x.urgence === 'critique' && x.statut !== 'résolu' && x.statut !== 'clos');
   const syndic = t.filter(x => x.statut === 'transmis_syndic');
   const resolus = t.filter(x => x.statut === 'résolu' || x.statut === 'clos');
+  // Focus par défaut à chaque (re)render du dashboard
+  _dashFocusMode = 'tout';
+  _dashFocusZone = null;
+
   const recent = t.slice(0, 6);
 
   // Contrats expirants
   const expirants = isManager() ? cache.contrats.filter(c => { const d = daysUntil(c.date_echeance); return d >= 0 && d <= 90; }) : [];
 
   el.innerHTML = `
-  <div style="padding:16px;max-width:100%;box-sizing:border-box;" id="dash-content">
-
-    <!-- HERO ÉDITORIAL -->
-    <div style="margin-bottom:24px;padding-bottom:20px;border-bottom:2px solid var(--border);position:relative;">
-      <!-- Fil de date -->
-      <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-        <span style="display:inline-block;width:20px;height:1px;background:var(--border-strong);"></span>
+  <div class="dash2" id="dash-content">
+    <section class="dash2-hero">
+      <div class="dash2-kicker">
+        <span class="dash2-kicker-line"></span>
         ${new Date().toLocaleDateString('fr-FR', {weekday:'long',day:'numeric',month:'long',year:'numeric'})}
-        <span style="display:inline-block;width:20px;height:1px;background:var(--border-strong);"></span>
+        <span class="dash2-kicker-line"></span>
       </div>
-      <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div class="dash2-hero-main">
         <div>
-          <h1 style="font-family:var(--font-head);font-size:clamp(26px,4vw,44px);font-weight:800;letter-spacing:-1.5px;line-height:1;margin-bottom:6px;">
-            Bonjour, ${displayName(profile?.prenom, profile?.nom, user?.email, 'bienvenue').split(' ')[0]} 👋
-          </h1>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <h1 class="dash2-title">Bonjour, ${displayName(profile?.prenom, profile?.nom, user?.email, 'bienvenue').split(' ')[0]} 👋</h1>
+          <div class="dash2-subline">
             ${critiques.length > 0
-              ? `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--red-light);border:1px solid var(--red-border);color:var(--red);font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;">🔴 ${critiques.length} critique${critiques.length>1?'s':''}</span>`
-              : `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--green-light);border:1px solid var(--green-border);color:var(--green);font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;">✅ Tout va bien</span>`
+              ? `<span class="dash2-pill danger">🔴 ${critiques.length} critique${critiques.length>1?'s':''}</span>`
+              : `<span class="dash2-pill success">✅ Tout va bien</span>`
             }
-            ${ouverts.length > 0 ? `<span style="font-size:12px;color:var(--text-3);">${ouverts.length} signalement${ouverts.length>1?'s':''} en cours</span>` : ''}
+            ${ouverts.length > 0 ? `<span class="dash2-muted">${ouverts.length} signalement${ouverts.length>1?'s':''} en cours</span>` : ''}
           </div>
         </div>
-        <button class="btn btn-primary" onclick="openNewTicket()" style="flex-shrink:0;gap:6px;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Signaler
-        </button>
+        <div class="dash2-actions">
+          <button class="btn btn-primary" onclick="openNewTicket()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nouveau signalement
+          </button>
+          <button class="btn btn-secondary" onclick="nav('tickets')">Voir les signalements</button>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="stats-row">
+    <section class="dash2-metrics stats-row">
       <div class="stat orange" onclick="nav('tickets')" style="animation:pageIn .3s .05s both;">
         <div class="stat-icon">🔧</div>
         <div class="stat-num">${ouverts.length}</div>
@@ -90,67 +95,80 @@ async function renderDashboard() {
         <div class="stat-label">Résolus</div>
         <div class="stat-sub">Total traités</div>
       </div>
-    </div>
+    </section>
 
-    <div class="g2">
-      <!-- SIGNALEMENTS RÉCENTS -->
-      <div class="card" style="animation:pageIn .3s .25s both;">
-        <div class="card-header" style="padding:14px 16px;">
-          <div>
-            <span class="card-title" style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);font-weight:700;">Signalements récents</span>
-          </div>
-          <button class="btn btn-ghost btn-sm" onclick="nav('tickets')" style="font-size:12px;">Tout voir →</button>
+    <section class="dash2-focusbar" id="dash-focusbar" aria-label="Filtres du tableau de bord">
+      <button class="dash2-chip sel" data-dash-focus="tout" onclick="setDashFocus('tout')">Tout</button>
+      <button class="dash2-chip warn" data-dash-focus="ouvert" onclick="setDashFocus('ouvert')">Ouverts</button>
+      <button class="dash2-chip danger" data-dash-focus="critique" onclick="setDashFocus('critique')">Critiques</button>
+      ${isManager()
+        ? `<button class="dash2-chip info" data-dash-focus="transmis" onclick="setDashFocus('transmis')">Transmis</button>`
+        : `<button class="dash2-chip info" data-dash-focus="mine" onclick="setDashFocus('mine')">Mes</button>`}
+      <button class="dash2-chip success" data-dash-focus="resolu" onclick="setDashFocus('resolu')">Résolus</button>
+      <button class="dash2-chip dash2-chip-zone" id="dash-chip-zone" style="display:none;" onclick="clearDashFocus()">Zone sélectionnée</button>
+    </section>
+
+    <section class="dash2-grid g2">
+      <div class="card dash2-card" style="animation:pageIn .3s .25s both;">
+        <div class="card-header">
+          <span class="card-title dash2-card-title">Signalements récents</span>
+          <button class="btn btn-ghost btn-sm" onclick="nav('tickets')">Tout voir →</button>
         </div>
-        <div style="padding:0 16px 8px;">
-          ${recent.length === 0 ? emptyState('📋', 'Tout va bien !', 'Aucun signalement en cours dans la résidence.', '<button class="btn btn-primary btn-sm" onclick="openNewTicket()">+ Signaler un problème</button>') :
-            recent.map(t => `
-              <div class="act-item" onclick="openDetail('${t.id}')">
-                <div class="act-ic" style="background:${t.urgence==='critique'?'var(--red-light)':t.urgence==='important'?'var(--orange-light)':'var(--blue-light)'};border:1px solid ${t.urgence==='critique'?'var(--red-border)':t.urgence==='important'?'var(--orange-border)':'var(--blue-border)'};">
-                  ${t.urgence==='critique'?'🔴':t.urgence==='important'?'🟠':'🔵'}
-                </div>
-                <div style="flex:1;min-width:0;overflow:hidden;">
-                  <div class="act-txt" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${escHtml(t.titre)}</div>
-                  <div class="act-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(t.batiment||'')}${t.zone?' · '+escHtml(t.zone):''}</div>
-                  <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
-                    ${badgeStatut(t.statut)}
-                    <span style="font-size:10px;color:var(--text-3);">⏱ ${depuisJours(t.created_at)}</span>
+        <div class="dash2-card-content">
+          <div id="dash-recent-list">
+            ${recent.length === 0 ? emptyState('📋', 'Tout va bien !', 'Aucun signalement en cours dans la résidence.', '<button class="btn btn-primary btn-sm" onclick="openNewTicket()">+ Signaler un problème</button>') :
+              recent.map(t => `
+                <div class="act-item" onclick="openDetail('${t.id}')">
+                  <div class="act-ic" style="background:${t.urgence==='critique'?'var(--red-light)':t.urgence==='important'?'var(--orange-light)':'var(--blue-light)'};border:1px solid ${t.urgence==='critique'?'var(--red-border)':t.urgence==='important'?'var(--orange-border)':'var(--blue-border)'};">
+                    ${t.urgence==='critique'?'🔴':t.urgence==='important'?'🟠':'🔵'}
                   </div>
-                </div>
-              </div>`).join('')}
+                  <div style="flex:1;min-width:0;overflow:hidden;">
+                    <div class="act-txt" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${escHtml(t.titre)}</div>
+                    <div class="act-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(t.batiment||'')}${t.zone?' · '+escHtml(t.zone):''}</div>
+                    <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+                      ${badgeStatut(t.statut)}
+                      <span style="font-size:10px;color:var(--text-3);">⏱ ${depuisJours(t.created_at)}</span>
+                    </div>
+                  </div>
+                </div>`).join('')}
+          </div>
         </div>
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:14px;">
-        <!-- GRAPHIQUE -->
-        <div class="card" style="animation:pageIn .3s .30s both;">
-          <div class="card-header" style="padding:14px 16px;">
-            <span class="card-title" style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);font-weight:700;">Activité · 6 mois</span>
+      <div class="dash2-stack">
+        <div class="card dash2-card" style="animation:pageIn .3s .30s both;">
+          <div class="card-header">
+            <span class="card-title dash2-card-title">Activité · 6 mois</span>
           </div>
-          <div style="padding:8px 16px 16px;">
-            <canvas id="dash-chart" height="110"></canvas>
+          <div class="dash2-card-content">
+            <div class="dash2-chart-wrap">
+              <canvas id="dash-chart" height="110"></canvas>
+              <div id="dash-chart-tip" class="dash2-chart-tip" style="display:none;"></div>
+            </div>
           </div>
         </div>
 
-        <!-- PAR BÂTIMENT -->
-        <div class="card" style="animation:pageIn .3s .35s both;">
-          <div class="card-header" style="padding:14px 16px;">
-            <span class="card-title" style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);font-weight:700;">Par bâtiment</span>
+        <div class="card dash2-card" style="animation:pageIn .3s .35s both;">
+          <div class="card-header">
+            <span class="card-title dash2-card-title">Par bâtiment</span>
           </div>
-          <div style="padding:8px 16px 14px;">
-            ${[...COPRO.tours, 'Parking visiteurs','Parking privé','Garages','Aire de jeux','Portails / portillons','Extérieur général'].map(zone => {
-              const cnt = ouverts.filter(t => t.batiment === zone).length;
-              if (cnt === 0) return '';
-              const isTour = zone.startsWith('Tour');
-              const pct = Math.min(100, cnt * 25);
-              const barColor = cnt >= 3 ? 'var(--red)' : cnt >= 2 ? 'var(--orange)' : 'var(--accent)';
-              return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;min-width:0;">
-                <div style="font-size:12px;font-weight:600;flex-shrink:0;width:72px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-2);">${isTour ? zone : zone.split(' ')[0]}</div>
-                <div style="background:var(--surface-2);border-radius:3px;height:6px;flex:1;overflow:hidden;">
-                  <div style="background:${barColor};height:100%;width:${pct}%;border-radius:3px;transition:width .6s cubic-bezier(.4,0,.2,1);"></div>
-                </div>
-                <div style="font-size:12px;font-weight:800;color:${barColor};flex-shrink:0;min-width:14px;text-align:right;">${cnt}</div>
-              </div>`;
-            }).join('') || '<div style="font-size:13px;color:var(--text-3);text-align:center;padding:8px 0;">Aucun problème ouvert 🎉</div>'}
+          <div class="dash2-card-content">
+            <div id="dash-zone-list">
+              ${[...COPRO.tours, 'Parking visiteurs','Parking privé','Garages','Aire de jeux','Portails / portillons','Extérieur général'].map(zone => {
+                const cnt = ouverts.filter(t => t.batiment === zone).length;
+                if (cnt === 0) return '';
+                const isTour = zone.startsWith('Tour');
+                const pct = Math.min(100, cnt * 25);
+                const barColor = cnt >= 3 ? 'var(--red)' : cnt >= 2 ? 'var(--orange)' : 'var(--accent)';
+                return `<div class="dash2-zone-row dash2-zone-clickable" onclick='setDashZoneFocus(${JSON.stringify(zone)})' title='Focus: ${escHtml(zone)}'>
+                  <div class="dash2-zone-name">${isTour ? zone : zone.split(' ')[0]}</div>
+                  <div class="dash2-zone-bar">
+                    <div style="background:${barColor};width:${pct}%;"></div>
+                  </div>
+                  <div class="dash2-zone-count" style="color:${barColor};">${cnt}</div>
+                </div>`;
+              }).join('') || '<div style="font-size:13px;color:var(--text-3);text-align:center;padding:8px 0;">Aucun problème ouvert 🎉</div>'}
+            </div>
           </div>
         </div>
 
@@ -174,34 +192,34 @@ async function renderDashboard() {
           </div>
         </div>` : ''}
 
-        <div class="card" id="dash-events-widget">
+        <div class="card dash2-card" id="dash-events-widget">
           <div class="card-header">
             <span class="card-title">📅 Prochains événements</span>
             <button class="btn btn-ghost btn-sm" onclick="nav('agenda')">Agenda →</button>
           </div>
-          <div style="padding:8px 16px 12px;" id="dash-events-list">
+          <div class="dash2-card-content" id="dash-events-list">
             <div style="font-size:13px;color:var(--text-3);text-align:center;padding:12px;">Chargement…</div>
           </div>
         </div>
 
-        <div class="card" id="dash-annonces-widget">
+        <div class="card dash2-card" id="dash-annonces-widget">
           <div class="card-header">
             <span class="card-title">📢 Annonces</span>
             <button class="btn btn-ghost btn-sm" onclick="nav('annonces')">Toutes →</button>
           </div>
-          <div style="padding:8px 16px 12px;" id="dash-annonces-list">
+          <div class="dash2-card-content" id="dash-annonces-list">
             <div style="font-size:13px;color:var(--text-3);text-align:center;padding:12px;">Chargement…</div>
           </div>
         </div>
 
         <!-- Widget Votes en cours -->
         ${_votesCache.filter(v=>v.statut==='ouvert').length > 0 ? `
-        <div class="card">
+        <div class="card dash2-card">
           <div class="card-header">
             <span class="card-title">🗳️ Votes en cours</span>
             <button class="btn btn-ghost btn-sm" onclick="nav('votes')">Voter →</button>
           </div>
-          <div style="padding:8px 16px 12px;">
+          <div class="dash2-card-content">
             ${_votesCache.filter(v=>v.statut==='ouvert').slice(0,3).map(v => {
               const maRep = _reponsesCache[v.id];
               const total = (_allReponsesCache[v.id]||[]).length;
@@ -221,12 +239,12 @@ async function renderDashboard() {
 
         <!-- Widget Documents récents -->
         ${_docsCache.length > 0 ? `
-        <div class="card">
+        <div class="card dash2-card">
           <div class="card-header">
             <span class="card-title">📄 Documents récents</span>
             <button class="btn btn-ghost btn-sm" onclick="nav('documents')">Voir tous →</button>
           </div>
-          <div style="padding:8px 16px 12px;">
+          <div class="dash2-card-content">
             ${_docsCache.slice(0,4).map(d => {
               const cat = DOC_CATS[d.categorie] || { ico:'📄', color:'#6b7280' };
               const isNew = !_docsVus.has(d.id);
@@ -242,7 +260,7 @@ async function renderDashboard() {
           </div>
         </div>` : ''}
 
-        <div class="card">
+        <div class="card dash2-card">
           <div class="card-body" style="text-align:center;">
             <div style="font-size:24px;margin-bottom:8px;">📱</div>
             <div style="font-family:var(--font-head);font-weight:700;margin-bottom:6px;">Installer l'app</div>
@@ -250,10 +268,145 @@ async function renderDashboard() {
           </div>
         </div>
       </div>
-    </div>
+    </section>
   </div>`;
   // Charge les widgets en arrière-plan
   loadDashboardWidgets();
+}
+
+function clearDashFocus() {
+  setDashFocus('tout');
+}
+
+function setDashZoneFocus(zone) {
+  _dashFocusMode = 'zone';
+  _dashFocusZone = zone;
+  refreshDashFocus();
+}
+
+function setDashFocus(mode) {
+  _dashFocusMode = mode || 'tout';
+  _dashFocusZone = null;
+  refreshDashFocus();
+}
+
+function isResolvedStatut(statut) {
+  return ['résolu', 'clos'].includes(statut);
+}
+
+function isOpenStatut(statut) {
+  return !isResolvedStatut(statut);
+}
+
+function getDashTicketsForRecent() {
+  const list = cache.tickets || [];
+  const mode = _dashFocusMode;
+  if (mode === 'tout') return list;
+  if (mode === 'ouvert') return list.filter(t => isOpenStatut(t.statut));
+  if (mode === 'critique') return list.filter(t => t.urgence === 'critique' && isOpenStatut(t.statut));
+  if (mode === 'resolu') return list.filter(t => isResolvedStatut(t.statut));
+  if (mode === 'mine') return list.filter(t => t.auteur_id === user.id && isOpenStatut(t.statut));
+  if (mode === 'transmis') return list.filter(t => t.statut === 'transmis_syndic');
+  if (mode === 'zone') return list.filter(t => t.batiment === _dashFocusZone && isOpenStatut(t.statut));
+  return list;
+}
+
+function getDashTicketsForZones() {
+  const list = cache.tickets || [];
+  const mode = _dashFocusMode;
+  if (mode === 'tout') return list.filter(t => isOpenStatut(t.statut)); // comportement historique
+  // Le focus suit la logique de "récent", sauf pour la vue tout (open only)
+  return getDashTicketsForRecent();
+}
+
+function getDashTicketsForChart() {
+  const list = cache.tickets || [];
+  const mode = _dashFocusMode;
+  if (mode === 'tout') return list; // comportement historique
+  return getDashTicketsForRecent();
+}
+
+function renderDashRecentListHTML(list) {
+  const emptyByMode = {
+    ouvert: emptyState('✅', 'Tout va bien !', 'Aucun signalement en cours dans la résidence.', '<button class="btn btn-primary btn-sm" onclick="openNewTicket()">+ Signaler un problème</button>'),
+    critique: emptyState('🔍', 'Pas de critique pour le moment', 'Rien de critique à traiter dans la résidence.', '<button class="btn btn-primary btn-sm" onclick="openNewTicket()">+ Signaler un problème</button>'),
+    resolu: emptyState('🎉', 'Rien à afficher', 'Pas de résolutions récentes dans cette vue.', `<button class="btn btn-secondary btn-sm" onclick="nav('tickets')">Voir tout →</button>`),
+    mine: emptyState('👤', 'Aucun ticket actif', 'Vous n’avez pas de signalement ouvert en ce moment.', `<button class="btn btn-secondary btn-sm" onclick="nav('tickets')">Voir mes tickets →</button>`),
+    transmis: emptyState('📤', 'Rien en attente', 'Aucun ticket transmis à gérer actuellement.', `<button class="btn btn-secondary btn-sm" onclick="nav('tickets')">Voir →</button>`),
+    zone: emptyState('🧭', 'Aucune anomalie ici', 'Aucun signalement ouvert dans cette zone.', `<button class="btn btn-secondary btn-sm" onclick="nav('tickets')">Voir →</button>`)
+  };
+
+  if (!list.length) return emptyByMode[_dashFocusMode] || emptyState('📋', 'Rien à signaler', 'La résidence tourne bien.', '<button class="btn btn-primary btn-sm" onclick="openNewTicket()">+ Signaler un problème</button>');
+
+  return list.slice(0, 6).map(t => `
+    <div class="act-item" onclick="openDetail('${t.id}')">
+      <div class="act-ic" style="background:${t.urgence==='critique'?'var(--red-light)':t.urgence==='important'?'var(--orange-light)':'var(--blue-light)'};border:1px solid ${t.urgence==='critique'?'var(--red-border)':t.urgence==='important'?'var(--orange-border)':'var(--blue-border)'};">
+        ${t.urgence==='critique'?'🔴':t.urgence==='important'?'🟠':'🔵'}
+      </div>
+      <div style="flex:1;min-width:0;overflow:hidden;">
+        <div class="act-txt" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${escHtml(t.titre)}</div>
+        <div class="act-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(t.batiment||'')}${t.zone?' · '+escHtml(t.zone):''}</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+          ${badgeStatut(t.statut)}
+          <span style="font-size:10px;color:var(--text-3);">⏱ ${depuisJours(t.created_at)}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderDashZonesListHTML(tickets) {
+  const zoneNames = [...COPRO.tours, 'Parking visiteurs','Parking privé','Garages','Aire de jeux','Portails / portillons','Extérieur général'];
+  const counts = {};
+  for (const t of tickets) {
+    const k = t.batiment || '';
+    if (!k) continue;
+    counts[k] = (counts[k] || 0) + 1;
+  }
+
+  return zoneNames.map(zone => {
+    const cnt = counts[zone] || 0;
+    if (cnt === 0) return '';
+    const isTour = zone.startsWith('Tour');
+    const pct = Math.min(100, cnt * 25);
+    const barColor = cnt >= 3 ? 'var(--red)' : cnt >= 2 ? 'var(--orange)' : 'var(--accent)';
+    return `<div class="dash2-zone-row dash2-zone-clickable" onclick='setDashZoneFocus(${JSON.stringify(zone)})' title='Focus: ${escHtml(zone)}'>
+      <div class="dash2-zone-name">${isTour ? zone : zone.split(' ')[0]}</div>
+      <div class="dash2-zone-bar">
+        <div style="background:${barColor};width:${pct}%;"></div>
+      </div>
+      <div class="dash2-zone-count" style="color:${barColor};">${cnt}</div>
+    </div>`;
+  }).join('') || '<div style="font-size:13px;color:var(--text-3);text-align:center;padding:8px 0;">Aucun problème ici 🎯</div>';
+}
+
+function refreshDashFocus() {
+  const recentEl = $('dash-recent-list');
+  const zoneEl = $('dash-zone-list');
+  if (!recentEl || !zoneEl) return;
+
+  // Focus chips UI
+  const bar = $('dash-focusbar');
+  if (bar) {
+    bar.querySelectorAll('[data-dash-focus]').forEach(btn => {
+      const mode = btn.getAttribute('data-dash-focus');
+      btn.classList.toggle('sel', mode === _dashFocusMode);
+    });
+    const chipZone = $('dash-chip-zone');
+    if (chipZone) {
+      const show = _dashFocusMode === 'zone' && !!_dashFocusZone;
+      chipZone.style.display = show ? '' : 'none';
+      if (show) chipZone.textContent = 'Zone: ' + _dashFocusZone;
+    }
+  }
+
+  const recentTickets = getDashTicketsForRecent();
+  const zonesTickets = getDashTicketsForZones();
+  recentEl.innerHTML = renderDashRecentListHTML(recentTickets);
+  zoneEl.innerHTML = renderDashZonesListHTML(zonesTickets);
+
+  // Re-render chart with focus
+  renderDashChart();
 }
 
 async function loadDashboardWidgets() {
@@ -321,6 +474,7 @@ function renderDashChart() {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const tipEl = $('dash-chart-tip');
 
   // Génère les 6 derniers mois
   const months = [];
@@ -334,15 +488,17 @@ function renderDashChart() {
     });
   }
 
+  const ticketsForChart = getDashTicketsForChart();
+
   // Compte les tickets par mois
   const created = months.map(m =>
-    cache.tickets.filter(t => {
+    ticketsForChart.filter(t => {
       const d = new Date(t.created_at);
       return d.getFullYear() === m.year && d.getMonth() === m.month;
     }).length
   );
   const resolved = months.map(m =>
-    cache.tickets.filter(t => {
+    ticketsForChart.filter(t => {
       if (!['résolu','clos'].includes(t.statut)) return false;
       const d = new Date(t.updated_at || t.created_at);
       return d.getFullYear() === m.year && d.getMonth() === m.month;
@@ -419,6 +575,44 @@ function renderDashChart() {
   ctx.fillRect(legendX + 56, 4, 10, 8);
   ctx.fillStyle = textColor;
   ctx.fillText('Résolus', legendX + 70, 12);
+
+  // Tooltip au survol (premium UX)
+  if (tipEl) {
+    const wrap = canvas.closest('.dash2-chart-wrap') || canvas.parentElement;
+    if (wrap) {
+      const padL = pad.left;
+      const plotW = cW;
+      const perMonthW = plotW / months.length;
+
+      const handler = (e) => {
+        const rect = wrap.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+
+        const inside = px >= padL && px <= padL + plotW;
+        if (!inside) {
+          tipEl.style.display = 'none';
+          return;
+        }
+
+        const idx = Math.floor((px - padL) / perMonthW);
+        if (idx < 0 || idx >= months.length) {
+          tipEl.style.display = 'none';
+          return;
+        }
+
+        tipEl.style.display = 'block';
+        tipEl.style.left = `${px}px`;
+        tipEl.style.top = `${Math.max(8, py)}px`;
+        tipEl.innerHTML = `<b>${months[idx].label}</b><div style="margin-top:6px;">Créés : ${created[idx]}<br>Résolus : ${resolved[idx]}</div>`;
+      };
+
+      if (canvas.__dashHoverHandler) canvas.removeEventListener('mousemove', canvas.__dashHoverHandler);
+      canvas.__dashHoverHandler = handler;
+      canvas.addEventListener('mousemove', handler);
+      canvas.addEventListener('mouseleave', () => { tipEl.style.display = 'none'; });
+    }
+  }
 }
 
 const TICKET_FILTER_PRESET_KEY = 'coprosync_ticket_filter_preset_v1';
