@@ -1,0 +1,886 @@
+const EMOJIS = ['👍','❤️','😂','😮','🙏','✅','🔥','👏'];
+const CHAN_COLORS = {
+  general: '#2563eb', tour13: '#7c3aed', tour15: '#ea580c',
+  tour17: '#16a34a', tour19: '#d97706', cs: '#dc2626', feed: '#2563eb'
+};
+
+// State global messagerie
+let _msgState = {
+  conversations: [], messages: [],
+  activeConvId: null, activeChanType: 'feed', // 'feed' | 'chan' | 'dm'
+  channel: null, feedChannel: null,
+  replyTo: null, // { id, auteur, texte }
+  feed: [], feedReactions: {}, feedComments: {},
+  typingTimeout: null,
+  convFilter: '',
+  unreadByConv: {},
+  readCursorByConv: {},
+  drafts: {},
+};
+const MSG_DRAFTS_KEY = 'coprosync_msg_drafts_v1';
+
+function loadMsgDrafts() {
+  try {
+    const raw = localStorage.getItem(MSG_DRAFTS_KEY);
+    _msgState.drafts = raw ? JSON.parse(raw) : {};
+  } catch {
+    _msgState.drafts = {};
+  }
+}
+
+function saveMsgDrafts() {
+  try { localStorage.setItem(MSG_DRAFTS_KEY, JSON.stringify(_msgState.drafts || {})); } catch {}
+}
+
+function draftKeyForCurrentContext() {
+  return _msgState.activeChanType === 'feed' ? 'feed' : `conv:${_msgState.activeConvId || 'none'}`;
+}
+
+function saveCurrentDraft() {
+  const key = draftKeyForCurrentContext();
+  if (key === 'conv:none') return;
+  const input = _msgState.activeChanType === 'feed' ? $('feed-input') : $('chat-input');
+  if (!input) return;
+  const v = (input.value || '').trim();
+  if (!_msgState.drafts) _msgState.drafts = {};
+  if (v) _msgState.drafts[key] = v;
+  else delete _msgState.drafts[key];
+  saveMsgDrafts();
+}
+
+function restoreCurrentDraft() {
+  const key = draftKeyForCurrentContext();
+  const val = (_msgState.drafts || {})[key] || '';
+  const input = _msgState.activeChanType === 'feed' ? $('feed-input') : $('chat-input');
+  if (!input) return;
+  input.value = val;
+  if (val && _msgState.activeChanType !== 'feed') {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  }
+}
+
+// ── RENDER MESSAGES PAGE ──
+async function renderMessages() {
+  const page = $('page');
+  loadMsgDrafts();
+  page.innerHTML = `<div class="msg-layout" id="msg-layout">
+
+    <!-- SIDEBAR GAUCHE -->
+    <div class="msg-sidebar" id="msg-sidebar">
+      <div class="msg-sidebar-header">
+        <span>CoproSync</span>
+        <button class="btn btn-ghost btn-sm" onclick="openNewDM()" title="Message privé" style="padding:4px 6px;font-size:16px;">✏️</button>
+      </div>
+      <div style="padding:8px 12px 4px;">
+        <input class="input" id="msg-search-conv" placeholder="Rechercher un canal ou un DM..."
+          oninput="onMsgConvSearchInput(event)" style="height:34px;font-size:13px;">
+      </div>
+      <div class="msg-sidebar-scroll">
+
+        <!-- Feed -->
+        <div class="msg-section-label">Communauté</div>
+        <div class="msg-chan-item ${_msgState.activeChanType==='feed'?'active':''}" id="chan-feed" onclick="openFeed()">
+          <div class="msg-chan-ico">🏠</div>
+          <div class="msg-chan-name">Fil d'actualité</div>
+        </div>
+
+        <!-- Canaux groupes -->
+        <div class="msg-section-label">Canaux</div>
+        <div id="chan-list-groups"></div>
+
+        <!-- Messages privés -->
+        <div class="msg-section-label">
+          Messages privés
+        </div>
+        <div id="chan-list-dms"></div>
+
+      </div>
+    </div>
+
+    <!-- ZONE PRINCIPALE -->
+    <div class="msg-main" id="msg-main">
+      <div class="chat-empty" id="msg-welcome">
+        <div style="font-size:48px;margin-bottom:12px;">🏢</div>
+        <div style="font-family:var(--font-head);font-size:18px;font-weight:800;margin-bottom:6px;">Bienvenue sur CoproSync</div>
+        <div style="font-size:13px;color:var(--text-3);">Rejoignez le fil d'actualité ou une conversation</div>
+      </div>
+    </div>
+
+  </div>`;
+
+  await loadConversations();
+  renderSidebarGroups();
+  renderSidebarDMs();
+  startMsgRealtime();
+  startFeedRealtime();
+
+  // Ouvre le feed par défaut
+  if (_msgState.activeChanType === 'feed') {
+    openFeed();
+  } else if (_msgState.activeConvId) {
+    openConv(_msgState.activeConvId);
+  }
+}
+
+// ── SIDEBAR ──
+function renderSidebarGroups() {
+  const el = $('chan-list-groups');
+  if (!el) return;
+  const q = _msgState.convFilter || '';
+  const convs = filterConvsByRole(_msgState.conversations)
+    .filter(c => !c.type || c.type === 'groupe')
+    .filter(c => !q || (c.titre || '').toLowerCase().includes(q));
+  el.innerHTML = convs.map(c => {
+    const emoji = c.titre?.split(' ')[0] || '💬';
+    const titre = c.titre?.substring(c.titre.indexOf(' ') + 1) || c.titre;
+    const isActive = _msgState.activeConvId === c.id && _msgState.activeChanType === 'chan';
+    const unread = _msgState.unreadByConv?.[c.id] || 0;
+    return `<div class="msg-chan-item ${isActive?'active':''}" id="chan-${c.id}" onclick="openConv('${c.id}')">
+      <div class="msg-chan-ico">${emoji}</div>
+      <div class="msg-chan-name">${escHtml(titre)}</div>
+      ${unread > 0 ? `<div class="msg-chan-badge">${unread > 9 ? '9+' : unread}</div>` : ''}
+    </div>`;
+  }).join('') || '<div style="padding:4px 16px;font-size:12px;color:var(--text-3);">Aucun canal</div>';
+}
+
+function renderSidebarDMs() {
+  const el = $('chan-list-dms');
+  if (!el) return;
+  const q = _msgState.convFilter || '';
+  const dms = _msgState.conversations
+    .filter(c => c.type === 'prive')
+    .filter(c => !q || (c.titre || '').toLowerCase().includes(q));
+  if (!dms.length) {
+    el.innerHTML = `<div style="padding:4px 16px 8px;font-size:12px;color:var(--text-3);">
+      Aucun message privé<br>
+      <span style="cursor:pointer;color:var(--accent);" onclick="openNewDM()">Démarrer une conversation →</span>
+    </div>`;
+    return;
+  }
+  el.innerHTML = dms.map(c => {
+    const isActive = _msgState.activeConvId === c.id;
+    // Nom de l'autre personne
+    const autreNom = c.titre?.replace(/^🔒\s*/, '') || 'Privé';
+    const initiale = autreNom.charAt(0).toUpperCase();
+    const color = avatarColor(autreNom);
+    const unread = _msgState.unreadByConv?.[c.id] || 0;
+    return `<div class="msg-dm-item ${isActive?'active':''}" id="chan-${c.id}" onclick="openConv('${c.id}')">
+      <div class="msg-dm-av" style="background:${color};">${initiale}</div>
+      <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(autreNom)}</div>
+      ${unread > 0 ? `<div class="msg-chan-badge">${unread > 9 ? '9+' : unread}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function onMsgConvSearchInput(e) {
+  _msgState.convFilter = (e.target.value || '').toLowerCase().trim();
+  renderSidebarGroups();
+  renderSidebarDMs();
+}
+
+function escHtml(t) {
+  return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function avatarColor(name) {
+  const colors = ['#2563eb','#7c3aed','#ea580c','#16a34a','#d97706','#dc2626','#0891b2'];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return colors[Math.abs(h) % colors.length];
+}
+
+// ── FEED COMMUNAUTAIRE ──
+async function openFeed() {
+  saveCurrentDraft();
+  _msgState.activeChanType = 'feed';
+  _msgState.activeConvId = null;
+
+  // Update sidebar active
+  document.querySelectorAll('.msg-chan-item,.msg-dm-item').forEach(el => el.classList.remove('active'));
+  $('chan-feed')?.classList.add('active');
+
+  // Mobile slide
+  mobileShowMain();
+
+  const main = $('msg-main');
+  if (!main) return;
+  main.innerHTML = `
+    <div class="msg-chan-header">
+      <button class="msg-back-btn" onclick="mobileShowSidebar()">←</button>
+      <div style="font-size:20px;margin-right:2px;">🏠</div>
+      <div>
+        <div class="msg-chan-title">Fil d'actualité</div>
+        <div class="msg-chan-desc">La vie de la Résidence le Floréal</div>
+      </div>
+    </div>
+
+    <!-- Composer -->
+    <div class="feed-compose" id="feed-compose">
+      <div class="feed-compose-box">
+        <div class="feed-compose-av" style="background:${avatarColor(displayNameFromProfile(profile,user?.email))}">
+          ${(profile?.prenom||profile?.nom||user?.email||'?').charAt(0).toUpperCase()}
+        </div>
+        <textarea class="feed-compose-input" id="feed-input" placeholder="Partagez une info, une question… 💬" rows="1"
+          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px';saveCurrentDraft()"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey&&window.innerWidth>768){event.preventDefault();publishFeedPost();}"></textarea>
+      </div>
+      <div class="feed-compose-actions">
+        <button class="btn btn-ghost btn-sm" onclick="pickFeedEmoji(event)">😊</button>
+        <button class="btn btn-primary btn-sm" onclick="publishFeedPost()">Publier</button>
+      </div>
+    </div>
+
+    <!-- Feed scroll -->
+    <div class="feed-scroll" id="feed-scroll">
+      <div style="text-align:center;padding:32px;color:var(--text-3);">Chargement du fil…</div>
+    </div>`;
+
+  await loadFeed();
+  restoreCurrentDraft();
+}
+
+async function loadFeed() {
+  const { data: posts } = await sb.from('feed_posts')
+    .select('*, profiles(id,prenom,nom,email)')
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  const { data: reactions } = await sb.from('reactions')
+    .select('*')
+    .eq('target_type', 'post');
+
+  // Groupe les réactions par post
+  _msgState.feedReactions = {};
+  (reactions || []).forEach(r => {
+    if (!_msgState.feedReactions[r.target_id]) _msgState.feedReactions[r.target_id] = [];
+    _msgState.feedReactions[r.target_id].push(r);
+  });
+
+  _msgState.feed = posts || [];
+  renderFeed();
+}
+
+function renderFeed() {
+  const el = $('feed-scroll');
+  if (!el) return;
+  if (!_msgState.feed.length) {
+    el.innerHTML = `<div style="text-align:center;padding:48px 24px;">
+      <div style="font-size:48px;margin-bottom:12px;">👋</div>
+      <div style="font-family:var(--font-head);font-weight:700;font-size:16px;margin-bottom:6px;">Soyez le premier à poster !</div>
+      <div style="font-size:13px;color:var(--text-3);">Partagez une info, une question, une bonne nouvelle avec vos voisins.</div>
+    </div>`;
+    return;
+  }
+  el.innerHTML = _msgState.feed.map(p => renderFeedPost(p)).join('');
+}
+
+function renderFeedPost(p) {
+  const auteur = p.profiles ? displayName(p.profiles.prenom, p.profiles.nom, p.profiles.email, 'Résident') : 'Résident';
+  const initiale = auteur.charAt(0).toUpperCase();
+  const color = avatarColor(auteur);
+  const time = depuisJours(p.created_at);
+  const isMine = p.auteur_id === user?.id;
+
+  // Réactions groupées par emoji
+  const reacts = _msgState.feedReactions[p.id] || [];
+  const reactGroups = {};
+  reacts.forEach(r => {
+    if (!reactGroups[r.emoji]) reactGroups[r.emoji] = { count: 0, mine: false };
+    reactGroups[r.emoji].count++;
+    if (r.user_id === user?.id) reactGroups[r.emoji].mine = true;
+  });
+  const reactHtml = Object.entries(reactGroups).map(([emoji, data]) =>
+    `<div class="feed-reaction ${data.mine?'mine':''}" onclick="toggleFeedReaction('${p.id}','${emoji}')">
+      <span>${emoji}</span>
+      <span class="feed-reaction-count">${data.count}</span>
+    </div>`
+  ).join('');
+
+  // Contenu selon type
+  let body = '';
+  if (p.type === 'post') {
+    body = `<div class="feed-post-body">${escHtml(p.contenu)}</div>`;
+  } else if (p.type === 'ticket') {
+    body = `<div class="feed-event-card ticket">🔧 ${escHtml(p.contenu)}</div>`;
+  } else if (p.type === 'resolved') {
+    body = `<div class="feed-event-card resolved">✅ ${escHtml(p.contenu)}</div>`;
+  } else if (p.type === 'vote') {
+    body = `<div class="feed-event-card vote">🗳️ ${escHtml(p.contenu)}</div>`;
+  } else if (p.type === 'member') {
+    body = `<div class="feed-event-card member">👋 ${escHtml(p.contenu)}</div>`;
+  }
+
+  return `<div class="feed-post" id="post-${p.id}">
+    <div class="feed-post-header">
+      <div class="feed-post-av" style="background:${color};">${initiale}</div>
+      <div class="feed-post-meta">
+        <div class="feed-post-author">${escHtml(auteur)}</div>
+        <div class="feed-post-time">${time}</div>
+      </div>
+      ${isMine ? `<button class="btn btn-ghost btn-sm" style="padding:4px 6px;color:var(--text-3);" onclick="deleteFeedPost('${p.id}')">✕</button>` : ''}
+    </div>
+    ${body}
+    ${reactHtml ? `<div class="feed-reactions">${reactHtml}</div>` : ''}
+    <div class="feed-post-actions">
+      ${EMOJIS.slice(0,4).map(e =>
+        `<button class="feed-action-btn" onclick="toggleFeedReaction('${p.id}','${e}')">${e}</button>`
+      ).join('')}
+      <button class="feed-action-btn" onclick="toggleFeedComments('${p.id}')">
+        💬 Commenter
+      </button>
+    </div>
+    <div id="feed-comments-${p.id}" style="display:none;">
+      <div class="feed-comments" id="feed-comments-list-${p.id}"></div>
+      <div class="feed-comment-input-row" style="padding:0 0 4px;">
+        <div class="feed-compose-av" style="width:28px;height:28px;font-size:12px;background:${avatarColor(auteur)};">${initiale}</div>
+        <input class="feed-comment-input" id="feed-comment-input-${p.id}"
+          placeholder="Écrire un commentaire…"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();sendFeedComment('${p.id}');}">
+        <button class="chat-send" style="width:34px;height:34px;flex-shrink:0;" onclick="sendFeedComment('${p.id}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function publishFeedPost() {
+  const input = $('feed-input');
+  const contenu = input?.value.trim();
+  if (!contenu) return;
+  input.value = ''; input.style.height = 'auto';
+  saveCurrentDraft();
+
+  const { data: newPost, error } = await sb.from('feed_posts')
+    .insert({ auteur_id: user.id, contenu, type: 'post' })
+    .select('*, profiles(id,prenom,nom,email)')
+    .single();
+
+  if (error) { toast('Erreur publication', 'err'); return; }
+  if (newPost) {
+    if (!newPost.profiles) newPost.profiles = { id: user.id, prenom: profile?.prenom, nom: profile?.nom, email: user.email };
+    _msgState.feed.unshift(newPost);
+  }
+  renderFeed();
+}
+
+async function toggleFeedReaction(postId, emoji) {
+  const reacts = _msgState.feedReactions[postId] || [];
+  const existing = reacts.find(r => r.user_id === user.id && r.emoji === emoji);
+  if (existing) {
+    await sb.from('reactions').delete().eq('id', existing.id);
+    _msgState.feedReactions[postId] = reacts.filter(r => r.id !== existing.id);
+  } else {
+    const { data } = await sb.from('reactions').insert({
+      user_id: user.id, target_id: postId, target_type: 'post', emoji
+    }).select().single();
+    if (!_msgState.feedReactions[postId]) _msgState.feedReactions[postId] = [];
+    if (data) _msgState.feedReactions[postId].push(data);
+  }
+  // Re-render juste ce post
+  const postEl = $(`post-${postId}`);
+  const post = _msgState.feed.find(p => p.id === postId);
+  if (postEl && post) postEl.outerHTML = renderFeedPost(post);
+}
+
+async function toggleFeedComments(postId) {
+  // Ignore les posts optimistes non sauvegardés
+  if (postId.startsWith('tmp-')) return;
+  const el = $(`feed-comments-${postId}`);
+  if (!el) return;
+  const isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) await loadFeedComments(postId);
+}
+
+async function loadFeedComments(postId) {
+  if (!postId || postId.startsWith('tmp-')) return;
+  const listEl = $(`feed-comments-list-${postId}`);
+  if (!listEl) return;
+  const { data } = await sb.from('feed_posts')
+    .select('*, profiles(id,prenom,nom,email)')
+    .eq('reference_id', postId)
+    .eq('type', 'comment')
+    .order('created_at', { ascending: true });
+  if (!data?.length) { listEl.innerHTML = '<div style="padding:4px 0 8px;font-size:12px;color:var(--text-3);">Aucun commentaire — soyez le premier !</div>'; return; }
+  listEl.innerHTML = data.map(c => {
+    const auteur = c.profiles ? displayName(c.profiles.prenom, c.profiles.nom, c.profiles.email, 'Résident') : 'Résident';
+    const color = avatarColor(auteur);
+    return `<div class="feed-comment">
+      <div class="feed-comment-av" style="background:${color};">${auteur.charAt(0).toUpperCase()}</div>
+      <div class="feed-comment-bubble">
+        <div class="feed-comment-author">${escHtml(auteur)} <span style="font-weight:400;color:var(--text-3);">${depuisJours(c.created_at)}</span></div>
+        ${escHtml(c.contenu)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function sendFeedComment(postId) {
+  const input = $(`feed-comment-input-${postId}`);
+  const contenu = input?.value.trim();
+  if (!contenu) return;
+  input.value = '';
+  await sb.from('feed_posts').insert({
+    auteur_id: user.id, contenu, type: 'comment', reference_id: postId
+  });
+  await loadFeedComments(postId);
+}
+
+async function deleteFeedPost(postId) {
+  if (!confirm('Supprimer ce post ?')) return;
+  await sb.from('feed_posts').delete().eq('id', postId);
+  _msgState.feed = _msgState.feed.filter(p => p.id !== postId);
+  renderFeed();
+}
+
+function startFeedRealtime() {
+  if (_msgState.feedChannel) return;
+  _msgState.feedChannel = sb.channel('feed-global')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'feed_posts' }, async payload => {
+      const p = payload.new;
+      if (p.type === 'comment') {
+        // Recharge les commentaires si ouverts
+        const listEl = $(`feed-comments-list-${p.reference_id}`);
+        if (listEl) loadFeedComments(p.reference_id);
+        return;
+      }
+      if (p.auteur_id === user.id) return; // déjà optimiste
+      // Charge le profil
+      const { data: prof } = await sb.from('profiles').select('id,prenom,nom,email').eq('id', p.auteur_id).single();
+      const post = { ...p, profiles: prof };
+      _msgState.feed.unshift(post);
+      if (_msgState.activeChanType === 'feed') renderFeed();
+      else toast('🏠 Nouveau post dans le fil', 'ok');
+    })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reactions' }, payload => {
+      const r = payload.new;
+      if (r.target_type === 'post' && r.user_id !== user.id) {
+        if (!_msgState.feedReactions[r.target_id]) _msgState.feedReactions[r.target_id] = [];
+        _msgState.feedReactions[r.target_id].push(r);
+        const post = _msgState.feed.find(p => p.id === r.target_id);
+        const postEl = $(`post-${r.target_id}`);
+        if (postEl && post) postEl.outerHTML = renderFeedPost(post);
+      }
+    })
+    .subscribe();
+}
+
+// Publie dans le feed depuis l'app (tickets, votes, membres)
+async function publishFeedEvent(type, contenu) {
+  try {
+    await sb.from('feed_posts').insert({ auteur_id: user.id, contenu, type });
+  } catch(e) { console.warn('[feed]', e.message); }
+}
+
+// ── CANAUX DE DISCUSSION ──
+async function loadConversations() {
+  // Charge uniquement les conversations dont l'utilisateur est membre
+  const { data: memberships } = await sb.from('conversation_membres')
+    .select('conversation_id,lu_jusqu_a').eq('user_id', user.id);
+  const ids = (memberships || []).map(m => m.conversation_id);
+  _msgState.readCursorByConv = Object.fromEntries((memberships || []).map(m => [m.conversation_id, m.lu_jusqu_a || null]));
+  if (!ids.length) { _msgState.conversations = []; renderSidebarGroups(); renderSidebarDMs(); return; }
+
+  const { data, error } = await sb.from('conversations')
+    .select('*').in('id', ids).order('created_at');
+  if (error) { console.warn('[msg] loadConversations:', error.message); return; }
+  _msgState.conversations = data || [];
+  await computeUnreadByConversation();
+  renderSidebarGroups();
+  renderSidebarDMs();
+}
+
+async function computeUnreadByConversation() {
+  const convs = _msgState.conversations || [];
+  const out = {};
+  for (const c of convs) {
+    const cursor = _msgState.readCursorByConv[c.id];
+    let q = sb.from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('conversation_id', c.id)
+      .neq('auteur_id', user.id);
+    if (cursor) q = q.gt('created_at', cursor);
+    const { count } = await q;
+    out[c.id] = count || 0;
+  }
+  _msgState.unreadByConv = out;
+}
+
+async function openConv(convId) {
+  saveCurrentDraft();
+  _msgState.activeConvId = convId;
+  _msgState.activeChanType = _msgState.conversations.find(c=>c.id===convId)?.type === 'prive' ? 'dm' : 'chan';
+
+  // Update sidebar
+  document.querySelectorAll('.msg-chan-item,.msg-dm-item').forEach(el => el.classList.remove('active'));
+  $(`chan-feed`)?.classList.remove('active');
+  $(`chan-${convId}`)?.classList.add('active');
+
+  // Mobile
+  mobileShowMain();
+
+  const conv = _msgState.conversations.find(c => c.id === convId);
+  if (!conv) return;
+  const emoji = conv.titre?.split(' ')[0] || '💬';
+  const titre = conv.titre?.substring(conv.titre.indexOf(' ') + 1) || conv.titre;
+  const isPrive = conv.type === 'prive';
+
+  const main = $('msg-main');
+  if (!main) return;
+  main.innerHTML = `
+    <div class="msg-chan-header">
+      <button class="msg-back-btn" onclick="mobileShowSidebar()">←</button>
+      <div style="font-size:20px;margin-right:2px;">${emoji}</div>
+      <div class="chat-header-info">
+        <div class="msg-chan-title">${escHtml(titre)}</div>
+        <div class="msg-chan-desc" id="chat-members-count">${isPrive ? '🔒 Conversation privée' : 'Canal'}</div>
+      </div>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+      <div style="text-align:center;padding:24px;color:var(--text-3);font-size:13px;">Chargement…</div>
+    </div>
+    <div class="msg-reply-bar" id="msg-reply-bar" style="display:none;">
+      <span style="color:var(--text-3);">↩️ Répondre à</span>
+      <div class="msg-reply-bar-content" id="msg-reply-bar-content"></div>
+      <button class="msg-reply-bar-close" onclick="clearReply()">✕</button>
+    </div>
+    <div class="chat-typing" id="chat-typing"></div>
+    <div class="chat-input-bar">
+      <div class="chat-input-wrap">
+        <textarea class="chat-input" id="chat-input" placeholder="Message…" rows="1"
+          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';onChatInput(event);saveCurrentDraft();"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey&&window.innerWidth>768){event.preventDefault();sendMessage();}"></textarea>
+        <div id="chat-mention-list" class="chat-mention-pop" style="display:none;"></div>
+      </div>
+      <button class="chat-send" onclick="sendMessage()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+      </button>
+    </div>`;
+
+  await loadMessages(convId);
+  restoreCurrentDraft();
+  _msgState.unreadByConv[convId] = 0;
+  renderSidebarGroups();
+  renderSidebarDMs();
+  markConvRead(convId);
+}
+
+function mobileShowMain() {
+  const sidebar = $('msg-sidebar');
+  const main = $('msg-main');
+  if (window.innerWidth <= 768) {
+    if (sidebar) sidebar.classList.add('hidden');
+    if (main) main.classList.add('visible');
+  }
+}
+
+function mobileShowSidebar() {
+  const sidebar = $('msg-sidebar');
+  const main = $('msg-main');
+  if (sidebar) sidebar.classList.remove('hidden');
+  if (main) main.classList.remove('visible');
+  _msgState.activeConvId = null;
+}
+
+// ── MESSAGES ──
+async function loadMessages(convId) {
+  const { data, error } = await sb.from('messages')
+    .select('*, profiles(nom, prenom), reply:reply_to_id(texte, profiles(prenom,nom))')
+    .eq('conversation_id', convId)
+    .order('created_at', { ascending: true })
+    .limit(100);
+  if (error) { console.warn('[msg] loadMessages:', error.message); return; }
+  _msgState.messages = data || [];
+
+  // Charge les réactions des messages
+  const msgIds = (data||[]).map(m => m.id).filter(id => !id.startsWith('tmp-'));
+  if (msgIds.length) {
+    const { data: reacts } = await sb.from('reactions')
+      .select('*').in('target_id', msgIds).eq('target_type', 'message');
+    _msgState.msgReactions = {};
+    (reacts||[]).forEach(r => {
+      if (!_msgState.msgReactions[r.target_id]) _msgState.msgReactions[r.target_id] = [];
+      _msgState.msgReactions[r.target_id].push(r);
+    });
+  }
+
+  renderMessageBubbles();
+}
+
+function renderMessageBubbles() {
+  const el = $('chat-messages');
+  if (!el) return;
+  const msgs = _msgState.messages;
+  if (!msgs.length) {
+    el.innerHTML = '<div style="text-align:center;padding:48px 24px;"><div style="font-size:40px;margin-bottom:10px;">👋</div><div style="font-size:14px;color:var(--text-3);">Soyez le premier à écrire !</div></div>';
+    return;
+  }
+  let lastDate = null, lastAuteur = null;
+  const html = [];
+  msgs.forEach(m => {
+    const isMine = m.auteur_id === user.id;
+    const auteur = m.profiles ? displayName(m.profiles.prenom, m.profiles.nom, null, '?') : '?';
+    const d = new Date(m.created_at);
+    const dateStr = d.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+    const timeStr = d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+    const showSender = !isMine && auteur !== lastAuteur;
+
+    if (dateStr !== lastDate) {
+      lastDate = dateStr; lastAuteur = null;
+      html.push(`<div class="msg-date-sep">${dateStr}</div>`);
+    }
+
+    // Reply preview
+    let replyHtml = '';
+    if (m.reply) {
+      const replyAuteur = m.reply.profiles ? displayName(m.reply.profiles.prenom, m.reply.profiles.nom, null, '?') : '?';
+      replyHtml = `<div class="msg-reply-preview">↩️ ${escHtml(replyAuteur)} : ${escHtml((m.reply.texte||'').substring(0,60))}</div>`;
+    }
+
+    // Réactions
+    const reacts = (_msgState.msgReactions || {})[m.id] || [];
+    const rGroups = {};
+    reacts.forEach(r => {
+      if (!rGroups[r.emoji]) rGroups[r.emoji] = { count:0, mine:false };
+      rGroups[r.emoji].count++;
+      if (r.user_id === user.id) rGroups[r.emoji].mine = true;
+    });
+    const reactHtml = Object.entries(rGroups).map(([e, d]) =>
+      `<div class="msg-reaction ${d.mine?'mine':''}" onclick="toggleMsgReaction('${m.id}','${e}')">
+        <span>${e}</span><span class="msg-reaction-count">${d.count}</span>
+      </div>`
+    ).join('');
+
+    const texteHtml = escHtml(m.texte||'').replace(/@(\S+)/g, '<span class="msg-mention-tag">@$1</span>');
+
+    html.push(`<div class="msg-group ${isMine?'mine':'theirs'}" id="msg-${m.id}">
+      ${showSender ? `<div class="msg-sender-name">${escHtml(auteur)}</div>` : ''}
+      <div style="position:relative;">
+        <div class="msg-bubble ${isMine?'mine':'theirs'}">
+          ${replyHtml}
+          ${texteHtml}
+        </div>
+        <div class="msg-actions">
+          ${EMOJIS.slice(0,3).map(e => `<button class="msg-action-btn" onclick="toggleMsgReaction('${m.id}','${e}')">${e}</button>`).join('')}
+          <button class="msg-action-btn" title="Répondre" onclick="setReply('${m.id}','${escHtml(auteur)}','${escHtml((m.texte||'').substring(0,50)).replace(/'/g,"\\'")}')">↩️</button>
+        </div>
+      </div>
+      ${reactHtml ? `<div class="msg-reactions">${reactHtml}</div>` : ''}
+      <div class="msg-time-row">${timeStr}</div>
+    </div>`);
+    lastAuteur = auteur;
+  });
+  el.innerHTML = html.join('');
+  requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+}
+
+function setReply(msgId, auteur, texte) {
+  _msgState.replyTo = { id: msgId, auteur, texte };
+  const bar = $('msg-reply-bar');
+  const content = $('msg-reply-bar-content');
+  if (bar) bar.style.display = 'flex';
+  if (content) content.textContent = `${auteur} : ${texte}`;
+  $('chat-input')?.focus();
+}
+
+function clearReply() {
+  _msgState.replyTo = null;
+  const bar = $('msg-reply-bar');
+  if (bar) bar.style.display = 'none';
+}
+
+async function toggleMsgReaction(msgId, emoji) {
+  if (!_msgState.msgReactions) _msgState.msgReactions = {};
+  const reacts = _msgState.msgReactions[msgId] || [];
+  const existing = reacts.find(r => r.user_id === user.id && r.emoji === emoji);
+  if (existing) {
+    await sb.from('reactions').delete().eq('id', existing.id);
+    _msgState.msgReactions[msgId] = reacts.filter(r => r.id !== existing.id);
+  } else {
+    const { data } = await sb.from('reactions').insert({
+      user_id: user.id, target_id: msgId, target_type: 'message', emoji
+    }).select().single();
+    if (!_msgState.msgReactions[msgId]) _msgState.msgReactions[msgId] = [];
+    if (data) _msgState.msgReactions[msgId].push(data);
+  }
+  renderMessageBubbles();
+}
+
+async function sendMessage() {
+  const input = $('chat-input');
+  const texte = input?.value.trim();
+  if (!texte || !_msgState.activeConvId) return;
+  const replyState = _msgState.replyTo ? { ..._msgState.replyTo } : null;
+  input.value = ''; input.style.height = 'auto';
+  saveCurrentDraft();
+
+  const payload = {
+    conversation_id: _msgState.activeConvId,
+    auteur_id: user.id,
+    texte,
+    reply_to_id: replyState?.id || null,
+    reply_preview: replyState ? `${replyState.auteur} : ${replyState.texte}` : null,
+  };
+
+  clearReply();
+
+  const { data: inserted, error } = await sb.from('messages')
+    .insert(payload)
+    .select('*, profiles(nom, prenom), reply:reply_to_id(texte, profiles(prenom,nom))')
+    .single();
+  if (error) { toast('Erreur envoi', 'err'); return; }
+
+  _msgState.messages.push(inserted || {
+    ...payload, id: 'tmp-' + Date.now(),
+    created_at: new Date().toISOString(),
+    profiles: { prenom: profile?.prenom, nom: profile?.nom },
+    reply: replyState ? { texte: replyState.texte, profiles: { prenom: replyState.auteur } } : null,
+  });
+  renderMessageBubbles();
+  markConvRead(_msgState.activeConvId);
+}
+
+async function markConvRead(convId) {
+  await sb.from('conversation_membres').upsert({
+    conversation_id: convId, user_id: user.id,
+    lu_jusqu_a: new Date().toISOString()
+  }, { onConflict: 'conversation_id,user_id' });
+}
+
+// ── REALTIME MESSAGES ──
+function startMsgRealtime() {
+  if (_msgState.channel) return;
+  _msgState.channel = sb.channel('messages-global')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+      const m = payload.new;
+      if (m.conversation_id === _msgState.activeConvId) {
+        if (m.auteur_id === user.id) return;
+        sb.from('profiles').select('nom,prenom').eq('id', m.auteur_id).single().then(({ data }) => {
+          _msgState.messages.push({ ...m, profiles: data });
+          renderMessageBubbles();
+          markConvRead(m.conversation_id);
+        });
+      } else if (m.auteur_id !== user.id) {
+        _msgState.unreadByConv[m.conversation_id] = (_msgState.unreadByConv[m.conversation_id] || 0) + 1;
+        renderSidebarGroups();
+        renderSidebarDMs();
+        toast('💬 Nouveau message', 'ok');
+      }
+    })
+    .subscribe();
+}
+
+// ── MENTIONS ──
+async function onChatInput(e) {
+  const ta = e.target;
+  const val = ta.value;
+  const cursor = ta.selectionStart;
+  const before = val.substring(0, cursor);
+  const atMatch = before.match(/@(\w*)$/);
+  const ml = $('chat-mention-list');
+  if (!atMatch) { if (ml) ml.style.display = 'none'; return; }
+  const query = atMatch[1].toLowerCase();
+  const { data: profs } = await sb.from('profiles').select('id,nom,prenom,role')
+    .or(`prenom.ilike.${query}%,nom.ilike.${query}%`).neq('id', user.id).limit(5);
+  const list = profs || [];
+  if (!ml || !list.length) { if (ml) ml.style.display = 'none'; return; }
+  const roleL = { administrateur:'Admin', syndic:'Syndic', membre_cs:'CS', 'copropriétaire':'Copro' };
+  ml.innerHTML = list.map(p => `
+    <div class="mention-item" onclick="insertChatMention('${p.id}','${(p.prenom||p.nom||'').replace(/'/g,"\\'")}','${(p.nom||'').replace(/'/g,"\\'")}')">
+      <div class="mention-av">${(p.prenom||p.nom||'?').charAt(0).toUpperCase()}</div>
+      <div>
+        <div style="font-weight:600;">${displayName(p.prenom,p.nom,null,'?')}</div>
+        <div style="font-size:11px;color:var(--text-3);">${roleL[p.role]||p.role}</div>
+      </div>
+    </div>`).join('');
+  ml.style.display = 'block';
+}
+
+function insertChatMention(userId, prenom, nom) {
+  const ta = $('chat-input');
+  const ml = $('chat-mention-list');
+  if (!ta) return;
+  const val = ta.value;
+  const cursor = ta.selectionStart;
+  const name = displayName(prenom, nom, null, prenom);
+  const newBefore = val.substring(0, cursor).replace(/@\w*$/, `@${name} `);
+  ta.value = newBefore + val.substring(cursor);
+  ta.focus();
+  if (ml) ml.style.display = 'none';
+  if (!_msgState.pendingMentions) _msgState.pendingMentions = [];
+  _msgState.pendingMentions.push({ userId, name });
+}
+
+// ── DM PRIVÉ ──
+async function openNewDM() {
+  const { data: users } = await sb.from('profiles')
+    .select('id,nom,prenom,email').eq('actif', true).neq('id', user.id).order('prenom');
+  if (!users?.length) { toast('Aucun autre utilisateur', 'warn'); return; }
+
+  // Modale de sélection
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay open';
+  overlay.id = 'dm-modal';
+  overlay.innerHTML = `<div class="modal" style="max-width:400px;">
+    <div class="mh"><span class="mh-title">💬 Nouveau message privé</span>
+      <button class="mclose" onclick="$('dm-modal').remove()">×</button></div>
+    <div class="mb">
+      <input class="input" id="dm-search" placeholder="Rechercher un résident…"
+        oninput="filterDMList()" style="margin-bottom:12px;">
+      <div id="dm-user-list">
+        ${users.map(u => {
+          const nom = displayName(u.prenom, u.nom, u.email, 'Résident');
+          const color = avatarColor(nom);
+          return `<div class="msg-dm-item" style="padding:8px 4px;border-radius:8px;" onclick="startDM('${u.id}','${nom.replace(/'/g,"\\'")}')">
+            <div class="msg-dm-av" style="background:${color};width:36px;height:36px;font-size:14px;">${nom.charAt(0).toUpperCase()}</div>
+            <div>
+              <div style="font-weight:600;font-size:14px;">${escHtml(nom)}</div>
+              <div style="font-size:11px;color:var(--text-3);">${u.email}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
+function filterDMList() {
+  const q = $('dm-search')?.value.toLowerCase() || '';
+  document.querySelectorAll('#dm-user-list .msg-dm-item').forEach(el => {
+    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+async function startDM(targetId, targetNom) {
+  $('dm-modal')?.remove();
+  // Vérifie si un DM existe déjà
+  const existing = _msgState.conversations.find(c =>
+    c.type === 'prive' && (c.membre_a === targetId || c.membre_b === targetId)
+  );
+  if (existing) { openConv(existing.id); return; }
+
+  const titre = `🔒 ${targetNom}`;
+  const { data: conv } = await sb.from('conversations')
+    .insert({ titre, type: 'prive', created_by: user.id, membre_a: user.id, membre_b: targetId })
+    .select().single();
+  if (conv) {
+    await sb.from('conversation_membres').insert([
+      { conversation_id: conv.id, user_id: user.id },
+      { conversation_id: conv.id, user_id: targetId }
+    ]);
+    await loadConversations();
+    openConv(conv.id);
+  }
+}
+
+function filterConvsByRole(convs) {
+  return convs.filter(c => {
+    if (c.titre?.includes('Conseil Syndical')) {
+      return ['administrateur','syndic','membre_cs'].includes(profile?.role);
+    }
+    return true;
+  });
+}
