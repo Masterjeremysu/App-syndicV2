@@ -68,9 +68,11 @@ function runSearch(q) {
 
   // Annonces (depuis Supabase — on cherche dans le cache si dispo)
   if (cache.annonces) {
-    const anns = cache.annonces.filter(a =>
-      a.titre?.toLowerCase().includes(query) || a.contenu?.toLowerCase().includes(query)
-    ).slice(0, 3);
+    const anns = cache.annonces
+      .filter(a => annonceReaderCanSee(a))
+      .filter(a =>
+        a.titre?.toLowerCase().includes(query) || a.contenu?.toLowerCase().includes(query)
+      ).slice(0, 3);
     if (anns.length) {
       results.push(`<div class="search-section-title">📢 Annonces</div>`);
       results.push(...anns.map(a => `
@@ -78,7 +80,7 @@ function runSearch(q) {
           <div class="search-result-ico">${a.type==='urgent'?'🚨':a.type==='important'?'⚠️':'📢'}</div>
           <div>
             <div class="search-result-title">${escHtml(a.titre)}</div>
-            <div class="search-result-sub">${a.contenu?.substring(0,60)||''}</div>
+            <div class="search-result-sub">${escHtml((a.contenu||'').substring(0,60))}</div>
           </div>
         </div>`));
     }
