@@ -32,6 +32,22 @@ function runSearch(q) {
 
   const results = [];
 
+  // FAQ CoproSync
+  if (typeof faqGlobalSearchMatches === 'function') {
+    const faqHits = faqGlobalSearchMatches(query, 4);
+    if (faqHits.length) {
+      results.push(`<div class="search-section-title">❓ FAQ</div>`);
+      results.push(...faqHits.map(f => `
+        <div class="search-result-item" onclick="closeSearch();typeof navigateToFaqItem==='function'?navigateToFaqItem('${f.id}'):nav('faq')">
+          <div class="search-result-ico">${f.ico || '❓'}</div>
+          <div>
+            <div class="search-result-title">${escHtml(f.q)}</div>
+            <div class="search-result-sub">Aide · lien direct possible</div>
+          </div>
+        </div>`));
+    }
+  }
+
   // Tickets
   const tickets = (cache.tickets || []).filter(t =>
     t.titre?.toLowerCase().includes(query) ||
