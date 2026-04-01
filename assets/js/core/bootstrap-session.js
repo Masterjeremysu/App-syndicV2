@@ -1,8 +1,12 @@
 // ── INIT — Restaure la session si elle existe ──
 (async () => {
+  // Mode inscription public
   if (checkRegisterMode()) return;
 
-  const authBtn = $('auth-btn');
+  // Mode FAQ public (sans connexion requise)
+  if (checkFaqMode()) return;
+
+  const authBtn     = $('auth-btn');
   const authBtnText = $('auth-btn-text');
   if (authBtn) { authBtn.disabled = true; authBtnText.textContent = 'Chargement…'; }
 
