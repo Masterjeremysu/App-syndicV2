@@ -4,6 +4,85 @@ const CHAN_COLORS = {
   tour17: '#16a34a', tour19: '#d97706', cs: '#dc2626', feed: '#2563eb'
 };
 
+const FEED_COMPOSE_CAT_KEY = 'coprosync_feed_compose_cat_v1';
+/** Rubriques filtre + publication (activité = auto : signalements, votes…) */
+const FEED_COMMUNITY_CATS = [
+  { id: 'tout', label: 'Tout le quartier', emoji: '🏘️', filterOnly: true },
+  { id: 'panneau', label: 'Panneau officiel', emoji: '📌', managerOnly: true, board: true },
+  { id: 'entraide', label: 'Entraide', emoji: '🤝' },
+  { id: 'petites_annonces', label: 'Petites annonces', emoji: '🧺' },
+  { id: 'vie_quartier', label: 'Vie du quartier', emoji: '☕' },
+  { id: 'evenements', label: 'Événements', emoji: '🎉' },
+  { id: 'pratique', label: 'Infos pratiques', emoji: '📋' },
+  { id: 'activite', label: 'Vie de la copro', emoji: '🏢', filterOnly: true },
+];
+
+function feedCatMeta(id) {
+  return FEED_COMMUNITY_CATS.find(c => c.id === id) || { id, label: id, emoji: '💬' };
+}
+
+function feedPostCategory(p) {
+  if (!p) return 'vie_quartier';
+  if (p.type && ['ticket', 'resolved', 'vote', 'member'].includes(p.type)) return 'activite';
+  return p.categorie || 'vie_quartier';
+}
+
+function sortFeedPosts(arr) {
+  return [...arr].sort((a, b) => {
+    const pa = a.epingle ? 1 : 0;
+    const pb = b.epingle ? 1 : 0;
+    if (pb !== pa) return pb - pa;
+    return new Date(b.created_at) - new Date(a.created_at);
+  });
+}
+
+function feedCountForFilter(catId) {
+  const rows = (_msgState.feed || []).filter(p => p.type !== 'comment');
+  if (catId === 'tout') return rows.length;
+  return rows.filter(p => feedPostCategory(p) === catId).length;
+}
+
+function feedComposeCatsForUser() {
+  return FEED_COMMUNITY_CATS.filter(c =>
+    !c.filterOnly && (!c.managerOnly || canManageAnnonces())
+  );
+}
+
+function readStoredFeedComposeCat() {
+  try {
+    const v = localStorage.getItem(FEED_COMPOSE_CAT_KEY);
+    const ok = feedComposeCatsForUser().some(c => c.id === v);
+    if (ok) return v;
+  } catch { /* ignore */ }
+  const pick = feedComposeCatsForUser().find(c => c.id === 'entraide') || feedComposeCatsForUser()[0];
+  return pick ? pick.id : 'entraide';
+}
+
+async function insertFeedPostRow(row, opts = {}) {
+  const { selectProfiles } = opts;
+  let q = sb.from('feed_posts').insert(row);
+  if (selectProfiles) q = q.select('*, profiles(id,prenom,nom,email)').single();
+  let res = await q;
+  if (res.error && /categorie|titre_panneau|epingle|column|schema/i.test(String(res.error.message))) {
+    const minimal = { auteur_id: row.auteur_id, contenu: row.contenu, type: row.type };
+    if (row.reference_id != null) minimal.reference_id = row.reference_id;
+    q = sb.from('feed_posts').insert(minimal);
+    if (selectProfiles) q = q.select('*, profiles(id,prenom,nom,email)').single();
+    res = await q;
+  }
+  return res;
+}
+
+async function insertFeedPostRowSimple(row) {
+  let res = await sb.from('feed_posts').insert(row);
+  if (res.error && /categorie|titre_panneau|epingle|column|schema/i.test(String(res.error.message))) {
+    const minimal = { auteur_id: row.auteur_id, contenu: row.contenu, type: row.type };
+    if (row.reference_id != null) minimal.reference_id = row.reference_id;
+    res = await sb.from('feed_posts').insert(minimal);
+  }
+  return res;
+}
+
 // State global messagerie
 let _msgState = {
   conversations: [], messages: [],
@@ -11,6 +90,8 @@ let _msgState = {
   channel: null, feedChannel: null,
   replyTo: null, // { id, auteur, texte }
   feed: [], feedReactions: {}, feedComments: {},
+  feedFilter: 'tout',
+  feedComposeCategory: 'entraide',
   typingTimeout: null,
   convFilter: '',
   unreadByConv: {},
@@ -81,8 +162,8 @@ async function renderMessages() {
         <!-- Feed -->
         <div class="msg-section-label">Communauté</div>
         <div class="msg-chan-item ${_msgState.activeChanType==='feed'?'active':''}" id="chan-feed" onclick="openFeed()">
-          <div class="msg-chan-ico">🏠</div>
-          <div class="msg-chan-name">Fil d'actualité</div>
+          <div class="msg-chan-ico">🏘️</div>
+          <div class="msg-chan-name">Communauté & panneau</div>
         </div>
 
         <!-- Canaux groupes -->
@@ -103,7 +184,7 @@ async function renderMessages() {
       <div class="chat-empty" id="msg-welcome">
         <div style="font-size:48px;margin-bottom:12px;">🏢</div>
         <div style="font-family:var(--font-head);font-size:18px;font-weight:800;margin-bottom:6px;">Bienvenue sur CoproSync</div>
-        <div style="font-size:13px;color:var(--text-3);">Rejoignez le fil d'actualité ou une conversation</div>
+        <div style="font-size:13px;color:var(--text-3);">Panneau du quartier, rubriques et messages privés</div>
       </div>
     </div>
 
@@ -191,10 +272,53 @@ function avatarColor(name) {
 }
 
 // ── FEED COMMUNAUTAIRE ──
+function setFeedFilter(cat) {
+  _msgState.feedFilter = cat;
+  document.querySelectorAll('.feed-cat-chip').forEach(el => {
+    el.classList.toggle('active', el.dataset.cat === cat);
+    el.setAttribute('aria-pressed', el.dataset.cat === cat ? 'true' : 'false');
+  });
+  renderFeed();
+}
+
+function setFeedComposeCategory(cat) {
+  const ok = feedComposeCatsForUser().some(c => c.id === cat);
+  if (!ok) return;
+  _msgState.feedComposeCategory = cat;
+  try { localStorage.setItem(FEED_COMPOSE_CAT_KEY, cat); } catch { /* ignore */ }
+  document.querySelectorAll('.feed-compose-cat').forEach(el => {
+    el.classList.toggle('active', el.dataset.cat === cat);
+  });
+  const tr = $('feed-titre-panneau-row');
+  const inp = $('feed-titre-panneau');
+  const showTitre = cat === 'panneau';
+  if (tr) tr.style.display = showTitre ? '' : 'none';
+  if (inp && !showTitre) inp.value = '';
+  const ph = $('feed-input');
+  if (ph) {
+    const hints = {
+      panneau: 'Message officiel visible par toute la résidence…',
+      entraide: 'Demande ou offre d’aide entre voisins…',
+      petites_annonces: 'Don, vente, service, à donner…',
+      vie_quartier: 'Un mot sympa, idée de rencontre, café ensemble…',
+      evenements: 'Fête des voisins, AG conviviale, date à retenir…',
+      pratique: 'Horaires, accès, contact utile…',
+    };
+    ph.placeholder = hints[cat] || 'Écrire…';
+  }
+}
+
+function onFeedComposeCatRowClick(e) {
+  const btn = e.target.closest('.feed-compose-cat');
+  if (!btn || !btn.dataset.cat) return;
+  setFeedComposeCategory(btn.dataset.cat);
+}
+
 async function openFeed() {
   saveCurrentDraft();
   _msgState.activeChanType = 'feed';
   _msgState.activeConvId = null;
+  _msgState.feedComposeCategory = readStoredFeedComposeCat();
 
   // Update sidebar active
   document.querySelectorAll('.msg-chan-item,.msg-dm-item').forEach(el => el.classList.remove('active'));
@@ -205,37 +329,76 @@ async function openFeed() {
 
   const main = $('msg-main');
   if (!main) return;
+
+  const chipHtml = FEED_COMMUNITY_CATS.map(c => {
+    const active = _msgState.feedFilter === c.id;
+    const cnt = feedCountForFilter(c.id);
+    return `<button type="button" class="feed-cat-chip ${active ? 'active' : ''}" data-cat="${c.id}"
+      aria-pressed="${active ? 'true' : 'false'}" onclick="setFeedFilter('${c.id}')">
+      <span class="feed-cat-chip-ico">${c.emoji}</span>
+      <span class="feed-cat-chip-lbl">${escHtml(c.label)}</span>
+      <span class="feed-cat-chip-badge" id="feed-cat-count-${c.id}" style="${cnt > 0 ? '' : 'display:none;'}">${cnt > 0 ? cnt : ''}</span>
+    </button>`;
+  }).join('');
+
+  const composeCatHtml = feedComposeCatsForUser().map(c => {
+    const on = _msgState.feedComposeCategory === c.id;
+    return `<button type="button" class="feed-compose-cat ${on ? 'active' : ''}" data-cat="${c.id}">${c.emoji} ${escHtml(c.label)}</button>`;
+  }).join('');
+
   main.innerHTML = `
-    <div class="msg-chan-header">
+    <div class="msg-chan-header feed-header-compact">
       <button class="msg-back-btn" onclick="mobileShowSidebar()">←</button>
-      <div style="font-size:20px;margin-right:2px;">🏠</div>
+      <div style="font-size:20px;margin-right:2px;">🏘️</div>
       <div>
-        <div class="msg-chan-title">Fil d'actualité</div>
-        <div class="msg-chan-desc">La vie de la Résidence le Floréal</div>
+        <div class="msg-chan-title">Vie du quartier</div>
+        <div class="msg-chan-desc">Panneau d’affichage numérique & échanges entre voisins</div>
       </div>
     </div>
 
-    <!-- Composer -->
-    <div class="feed-compose" id="feed-compose">
+    <div class="feed-hub">
+      <div class="feed-hub-inner">
+        <div class="feed-hub-kicker">Ensemble</div>
+        <h2 class="feed-hub-title">Le mur des voisins</h2>
+        <p class="feed-hub-desc">Annonces officielles, petits mots, coups de main et vie de la copropriété — tout se passe ici.</p>
+      </div>
+    </div>
+
+    <div class="feed-categories-bar">
+      <div class="feed-cat-chips-scroll" id="feed-cat-chips">${chipHtml}</div>
+    </div>
+
+    <div class="feed-compose feed-compose--community" id="feed-compose">
+      <div class="feed-compose-ribbon"><span>✏️</span> Publier dans une rubrique</div>
+      <div class="feed-compose-cats" id="feed-compose-cats" onclick="onFeedComposeCatRowClick(event)">${composeCatHtml}</div>
       <div class="feed-compose-box">
         <div class="feed-compose-av" style="background:${avatarColor(displayNameFromProfile(profile,user?.email))}">
           ${(profile?.prenom||profile?.nom||user?.email||'?').charAt(0).toUpperCase()}
         </div>
-        <textarea class="feed-compose-input" id="feed-input" placeholder="Partagez une info, une question… 💬" rows="1"
-          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px';saveCurrentDraft()"
-          onkeydown="if(event.key==='Enter'&&!event.shiftKey&&window.innerWidth>768){event.preventDefault();publishFeedPost();}"></textarea>
+        <div class="feed-compose-fields">
+          <div class="feed-titre-panneau-row" id="feed-titre-panneau-row" style="display:${_msgState.feedComposeCategory === 'panneau' ? '' : 'none'};">
+            <input type="text" class="feed-titre-panneau-input" id="feed-titre-panneau" maxlength="120"
+              placeholder="Titre de l’affiche (ex. Travaux ascenseur — semaine du 12)">
+          </div>
+          <textarea class="feed-compose-input" id="feed-input" placeholder="…" rows="1"
+            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';saveCurrentDraft()"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey&&window.innerWidth>768){event.preventDefault();publishFeedPost();}"></textarea>
+        </div>
       </div>
       <div class="feed-compose-actions">
-        <button class="btn btn-ghost btn-sm" onclick="pickFeedEmoji(event)">😊</button>
-        <button class="btn btn-primary btn-sm" onclick="publishFeedPost()">Publier</button>
+        <span class="feed-compose-hint">Entrée pour envoyer · Maj+Entrée pour sauter une ligne</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="pickFeedEmoji(event)">😊</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="publishFeedPost()">Publier dans la communauté</button>
+        </div>
       </div>
     </div>
 
-    <!-- Feed scroll -->
-    <div class="feed-scroll" id="feed-scroll">
+    <div class="feed-scroll feed-scroll--community" id="feed-scroll">
       <div style="text-align:center;padding:32px;color:var(--text-3);">Chargement du fil…</div>
     </div>`;
 
+  setFeedComposeCategory(_msgState.feedComposeCategory);
   await loadFeed();
   restoreCurrentDraft();
 }
@@ -243,8 +406,9 @@ async function openFeed() {
 async function loadFeed() {
   const { data: posts } = await sb.from('feed_posts')
     .select('*, profiles(id,prenom,nom,email)')
+    .neq('type', 'comment')
     .order('created_at', { ascending: false })
-    .limit(50);
+    .limit(120);
 
   const { data: reactions } = await sb.from('reactions')
     .select('*')
@@ -257,22 +421,74 @@ async function loadFeed() {
     _msgState.feedReactions[r.target_id].push(r);
   });
 
-  _msgState.feed = posts || [];
+  _msgState.feed = sortFeedPosts(posts || []);
   renderFeed();
+}
+
+function feedCatAccent(cat) {
+  const m = {
+    panneau: '#ea580c', entraide: '#2563eb', petites_annonces: '#7c3aed',
+    vie_quartier: '#059669', evenements: '#db2777', pratique: '#0d9488', activite: '#64748b',
+  };
+  return m[cat] || 'var(--accent)';
 }
 
 function renderFeed() {
   const el = $('feed-scroll');
   if (!el) return;
-  if (!_msgState.feed.length) {
-    el.innerHTML = `<div style="text-align:center;padding:48px 24px;">
-      <div style="font-size:48px;margin-bottom:12px;">👋</div>
-      <div style="font-family:var(--font-head);font-weight:700;font-size:16px;margin-bottom:6px;">Soyez le premier à poster !</div>
-      <div style="font-size:13px;color:var(--text-3);">Partagez une info, une question, une bonne nouvelle avec vos voisins.</div>
+  const rows = sortFeedPosts((_msgState.feed || []).filter(p => p.type !== 'comment'));
+  const f = _msgState.feedFilter || 'tout';
+  const inFilter = p => f === 'tout' || feedPostCategory(p) === f;
+
+  FEED_COMMUNITY_CATS.forEach(c => {
+    const badge = $(`feed-cat-count-${c.id}`);
+    if (!badge) return;
+    const n = feedCountForFilter(c.id);
+    badge.textContent = n > 0 ? String(n) : '';
+    badge.style.display = n > 0 ? '' : 'none';
+  });
+
+  const filtered = rows.filter(inFilter);
+  if (!filtered.length) {
+    const cm = feedCatMeta(f);
+    el.innerHTML = `<div class="feed-empty-cat">
+      <div class="feed-empty-cat-ico">${cm.emoji}</div>
+      <div class="feed-empty-cat-title">${f === 'tout' ? 'Soyez le premier à poster !' : `Pas encore de message dans « ${escHtml(cm.label)} »`}</div>
+      <div class="feed-empty-cat-desc">${f === 'tout'
+        ? 'Une annonce, une question aux voisins, un bon plan — tout le monde vous lit ici.'
+        : 'Essayez une autre rubrique ou publiez : votre message apparaîtra dans cette section.'}</div>
     </div>`;
     return;
   }
-  el.innerHTML = _msgState.feed.map(p => renderFeedPost(p)).join('');
+
+  const pinnedBlock = filtered.filter(p => p.epingle && p.type === 'post');
+  const rest = filtered.filter(p => !(p.epingle && p.type === 'post'));
+  const showBoard = pinnedBlock.length && (f === 'tout' || f === 'panneau');
+
+  let html = '';
+  if (showBoard) {
+    html += `<section class="feed-board-section" aria-label="Panneau — messages épinglés">
+      <header class="feed-board-head">
+        <span class="feed-board-pin" aria-hidden="true">📌</span>
+        <div>
+          <div class="feed-board-head-title">Panneau d’affichage</div>
+          <div class="feed-board-head-sub">À lire en priorité — infos pour tout le monde</div>
+        </div>
+      </header>
+      <div class="feed-board-posts">${pinnedBlock.map(p => renderFeedPost(p)).join('')}</div>
+    </section>`;
+  }
+
+  if (rest.length) {
+    if (showBoard) {
+      html += `<div class="feed-timeline-label"><span>Fil du quartier</span></div>`;
+    }
+    html += rest.map(p => renderFeedPost(p)).join('');
+  } else if (showBoard) {
+    html += `<div class="feed-timeline-end">— Rien d’autre pour le moment dans cette vue —</div>`;
+  }
+
+  el.innerHTML = html;
 }
 
 function renderFeedPost(p) {
@@ -281,6 +497,11 @@ function renderFeedPost(p) {
   const color = avatarColor(auteur);
   const time = depuisJours(p.created_at);
   const isMine = p.auteur_id === user?.id;
+  const cat = feedPostCategory(p);
+  const cmeta = feedCatMeta(cat);
+  const affiche = p.epingle && p.type === 'post';
+  const accent = feedCatAccent(cat);
+  const badge = `<span class="feed-post-cat-badge" style="--feed-cat:${accent}">${cmeta.emoji} ${escHtml(cmeta.label)}</span>`;
 
   // Réactions groupées par emoji
   const reacts = _msgState.feedReactions[p.id] || [];
@@ -300,7 +521,10 @@ function renderFeedPost(p) {
   // Contenu selon type
   let body = '';
   if (p.type === 'post') {
-    body = `<div class="feed-post-body">${escHtml(p.contenu)}</div>`;
+    const titreBloc = p.titre_panneau
+      ? `<div class="feed-post-affiche-titre">${escHtml(p.titre_panneau)}</div>`
+      : '';
+    body = `${titreBloc}<div class="feed-post-body">${escHtml(p.contenu)}</div>`;
   } else if (p.type === 'ticket') {
     body = `<div class="feed-event-card ticket">🔧 ${escHtml(p.contenu)}</div>`;
   } else if (p.type === 'resolved') {
@@ -311,14 +535,24 @@ function renderFeedPost(p) {
     body = `<div class="feed-event-card member">👋 ${escHtml(p.contenu)}</div>`;
   }
 
-  return `<div class="feed-post" id="post-${p.id}">
+  const pinBtn = canManageAnnonces() && p.type === 'post'
+    ? `<button type="button" class="btn btn-ghost btn-sm feed-pin-btn" title="${p.epingle ? 'Retirer du panneau' : 'Épingler au panneau'}" onclick="event.preventDefault();toggleFeedPin('${p.id}')">${p.epingle ? '📌' : '📍'}<span class="feed-pin-lbl">${p.epingle ? 'Épinglé' : 'Épingler'}</span></button>`
+    : '';
+
+  return `<div class="feed-post ${affiche ? 'feed-post--affiche' : ''}" id="post-${p.id}" data-feed-cat="${cat}">
     <div class="feed-post-header">
       <div class="feed-post-av" style="background:${color};">${initiale}</div>
       <div class="feed-post-meta">
-        <div class="feed-post-author">${escHtml(auteur)}</div>
+        <div class="feed-post-author-line">
+          <span class="feed-post-author">${escHtml(auteur)}</span>
+          ${badge}
+        </div>
         <div class="feed-post-time">${time}</div>
       </div>
-      ${isMine ? `<button class="btn btn-ghost btn-sm" style="padding:4px 6px;color:var(--text-3);" onclick="deleteFeedPost('${p.id}')">✕</button>` : ''}
+      <div class="feed-post-header-actions">
+        ${pinBtn}
+        ${isMine ? `<button type="button" class="btn btn-ghost btn-sm feed-del-btn" onclick="deleteFeedPost('${p.id}')" title="Supprimer">✕</button>` : ''}
+      </div>
     </div>
     ${body}
     ${reactHtml ? `<div class="feed-reactions">${reactHtml}</div>` : ''}
@@ -333,7 +567,7 @@ function renderFeedPost(p) {
     <div id="feed-comments-${p.id}" style="display:none;">
       <div class="feed-comments" id="feed-comments-list-${p.id}"></div>
       <div class="feed-comment-input-row" style="padding:0 0 4px;">
-        <div class="feed-compose-av" style="width:28px;height:28px;font-size:12px;background:${avatarColor(auteur)};">${initiale}</div>
+        <div class="feed-compose-av" style="width:28px;height:28px;font-size:12px;background:${avatarColor(displayNameFromProfile(profile,user?.email))};">${(profile?.prenom||profile?.nom||user?.email||'?').charAt(0).toUpperCase()}</div>
         <input class="feed-comment-input" id="feed-comment-input-${p.id}"
           placeholder="Écrire un commentaire…"
           onkeydown="if(event.key==='Enter'){event.preventDefault();sendFeedComment('${p.id}');}">
@@ -349,19 +583,44 @@ async function publishFeedPost() {
   const input = $('feed-input');
   const contenu = input?.value.trim();
   if (!contenu) return;
-  input.value = ''; input.style.height = 'auto';
+  let cat = _msgState.feedComposeCategory;
+  if (!feedComposeCatsForUser().some(c => c.id === cat)) cat = (feedComposeCatsForUser()[0] || { id: 'entraide' }).id;
+
+  const titreInp = $('feed-titre-panneau');
+  let titre_panneau = (titreInp?.value || '').trim();
+  if (cat !== 'panneau') titre_panneau = '';
+
+  input.value = '';
+  if (titreInp) titreInp.value = '';
+  input.style.height = 'auto';
   saveCurrentDraft();
 
-  const { data: newPost, error } = await sb.from('feed_posts')
-    .insert({ auteur_id: user.id, contenu, type: 'post' })
-    .select('*, profiles(id,prenom,nom,email)')
-    .single();
+  const row = { auteur_id: user.id, contenu, type: 'post', categorie: cat };
+  if (titre_panneau) row.titre_panneau = titre_panneau;
+
+  const { data: newPost, error } = await insertFeedPostRow(row, { selectProfiles: true });
 
   if (error) { toast('Erreur publication', 'err'); return; }
   if (newPost) {
     if (!newPost.profiles) newPost.profiles = { id: user.id, prenom: profile?.prenom, nom: profile?.nom, email: user.email };
-    _msgState.feed.unshift(newPost);
+    _msgState.feed = sortFeedPosts([newPost, ..._msgState.feed.filter(x => x.id !== newPost.id)]);
   }
+  renderFeed();
+  toast('Publié — merci de faire vivre le quartier !', 'ok');
+}
+
+async function toggleFeedPin(postId) {
+  if (!canManageAnnonces()) return;
+  const post = _msgState.feed.find(p => p.id === postId);
+  if (!post || post.type !== 'post') return;
+  const next = !post.epingle;
+  const { error } = await sb.from('feed_posts').update({ epingle: next }).eq('id', postId);
+  if (error) {
+    toast('Épinglage : colonne « epingle » absente ? Exécutez supabase_feed_community.sql', 'warn');
+    return;
+  }
+  post.epingle = next;
+  _msgState.feed = sortFeedPosts(_msgState.feed);
   renderFeed();
 }
 
@@ -441,18 +700,27 @@ function startFeedRealtime() {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'feed_posts' }, async payload => {
       const p = payload.new;
       if (p.type === 'comment') {
-        // Recharge les commentaires si ouverts
         const listEl = $(`feed-comments-list-${p.reference_id}`);
         if (listEl) loadFeedComments(p.reference_id);
         return;
       }
-      if (p.auteur_id === user.id) return; // déjà optimiste
-      // Charge le profil
+      if (p.auteur_id === user.id) return;
       const { data: prof } = await sb.from('profiles').select('id,prenom,nom,email').eq('id', p.auteur_id).single();
       const post = { ...p, profiles: prof };
-      _msgState.feed.unshift(post);
+      _msgState.feed = sortFeedPosts([post, ..._msgState.feed.filter(x => x.id !== post.id)]);
       if (_msgState.activeChanType === 'feed') renderFeed();
-      else toast('🏠 Nouveau post dans le fil', 'ok');
+      else toast('🏘️ Nouveau message sur le mur des voisins', 'ok');
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'feed_posts' }, payload => {
+      const p = payload.new;
+      if (p.type === 'comment') return;
+      const idx = _msgState.feed.findIndex(x => x.id === p.id);
+      if (idx >= 0) {
+        const prev = _msgState.feed[idx];
+        _msgState.feed[idx] = { ...prev, ...p, profiles: prev.profiles };
+        _msgState.feed = sortFeedPosts(_msgState.feed);
+        if (_msgState.activeChanType === 'feed') renderFeed();
+      }
     })
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reactions' }, payload => {
       const r = payload.new;
@@ -464,14 +732,23 @@ function startFeedRealtime() {
         if (postEl && post) postEl.outerHTML = renderFeedPost(post);
       }
     })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'feed_posts' }, payload => {
+      const id = payload.old?.id;
+      if (!id) return;
+      _msgState.feed = _msgState.feed.filter(x => x.id !== id);
+      if (_msgState.activeChanType === 'feed') renderFeed();
+    })
     .subscribe();
 }
 
 // Publie dans le feed depuis l'app (tickets, votes, membres)
 async function publishFeedEvent(type, contenu) {
+  const catMap = { ticket: 'pratique', resolved: 'pratique', vote: 'evenements', member: 'vie_quartier' };
+  const categorie = catMap[type] || 'activite';
   try {
-    await sb.from('feed_posts').insert({ auteur_id: user.id, contenu, type });
-  } catch(e) { console.warn('[feed]', e.message); }
+    const res = await insertFeedPostRowSimple({ auteur_id: user.id, contenu, type, categorie });
+    if (res.error) console.warn('[feed]', res.error.message);
+  } catch (e) { console.warn('[feed]', e.message); }
 }
 
 // ── CANAUX DE DISCUSSION ──
