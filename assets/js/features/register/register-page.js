@@ -161,11 +161,20 @@ async function submitRegister() {
     }).catch(()=>{});
 
     // Publie dans le feed communautaire
-    await sb2.from('feed_posts').insert({
+    const feedMemberRow = {
       auteur_id: data.user.id,
       contenu: `👋 ${prenom}${nom?' '+nom:''} vient de rejoindre la résidence !${tour?' ('+tour+')':''}`,
-      type: 'member'
-    }).catch(()=>{});
+      type: 'member',
+      categorie: 'vie_quartier',
+    };
+    let fr = await sb2.from('feed_posts').insert(feedMemberRow);
+    if (fr.error) {
+      await sb2.from('feed_posts').insert({
+        auteur_id: feedMemberRow.auteur_id,
+        contenu: feedMemberRow.contenu,
+        type: feedMemberRow.type,
+      });
+    }
   }
 
   // Remplace le formulaire par un message de succès
