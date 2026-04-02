@@ -99,6 +99,10 @@ let _msgState = {
   drafts: {},
   /** IDs des posts dont le fil commentaires est ouvert (temps réel + re-render) */
   feedOpenCommentIds: new Set(),
+  /** Pour éviter les re-render “visuels” quand rien n'a changé */
+  feedCommentSigByPost: {},
+  /** Compteur des commentaires reçus depuis la dernière ouverture du fil */
+  feedCommentUnreadByPost: {},
 };
 const MSG_DRAFTS_KEY = 'coprosync_msg_drafts_v1';
 
@@ -113,7 +117,7 @@ function startFeedCommentsPoll() {
       const listEl = $(`feed-comments-list-${sid}`);
       if (listEl) loadFeedComments(sid);
     });
-  }, 4000);
+  }, 8000);
 }
 
 function stopFeedCommentsPoll() {
@@ -545,6 +549,7 @@ function renderFeedPost(p) {
   const affiche = p.epingle && p.type === 'post';
   const accent = feedCatAccent(cat);
   const badge = `<span class="feed-post-cat-badge" style="--feed-cat:${accent}">${cmeta.emoji} ${escHtml(cmeta.label)}</span>`;
+  const unread = _msgState.feedCommentUnreadByPost[String(p.id)] || 0;
 
   // Réactions groupées par emoji (clé string = ids Supabase)
   const reacts = _msgState.feedReactions[String(p.id)] || [];
@@ -605,6 +610,7 @@ function renderFeedPost(p) {
       ).join('')}
       <button class="feed-action-btn" onclick="toggleFeedComments('${p.id}')">
         💬 Commenter
+        <span class="feed-unread-comment-badge" id="feed-unread-${p.id}" style="display:${unread>0 ? 'inline-flex' : 'none'};">${unread>0 ? unread : ''}</span>
       </button>
     </div>
     <div id="feed-comments-${p.id}" style="display:none;">
@@ -707,6 +713,10 @@ async function toggleFeedComments(postId) {
   el.style.display = isOpen ? 'none' : 'block';
   if (!isOpen) {
     _msgState.feedOpenCommentIds.add(sid);
+    // Une fois le fil ouvert, on considère les commentaires comme lus
+    _msgState.feedCommentUnreadByPost[sid] = 0;
+    const ub = $(`feed-unread-${sid}`);
+    if (ub) ub.style.display = 'none';
     await loadFeedComments(sid);
   } else {
     _msgState.feedOpenCommentIds.delete(sid);
@@ -723,7 +733,18 @@ async function loadFeedComments(postId) {
     .eq('reference_id', sid)
     .eq('type', 'comment')
     .order('created_at', { ascending: true });
-  if (!data?.length) { listEl.innerHTML = '<div style="padding:4px 0 8px;font-size:12px;color:var(--text-3);">Aucun commentaire — soyez le premier !</div>'; return; }
+  const last = data?.length ? data[data.length - 1] : null;
+  const sig = `${data?.length || 0}|${last?.id || ''}|${last?.created_at || ''}`;
+  if (_msgState.feedCommentSigByPost[sid] === sig) return;
+
+  _msgState.feedCommentSigByPost[sid] = sig;
+
+  if (!data?.length) {
+    listEl.innerHTML = '<div style="padding:4px 0 8px;font-size:12px;color:var(--text-3);">Aucun commentaire — soyez le premier !</div>';
+    return;
+  }
+
+  const prevScrollTop = listEl.scrollTop;
   listEl.innerHTML = data.map(c => {
     const auteur = c.profiles ? displayName(c.profiles.prenom, c.profiles.nom, c.profiles.email, 'Résident') : 'Résident';
     const color = avatarColor(auteur);
@@ -735,6 +756,9 @@ async function loadFeedComments(postId) {
       </div>
     </div>`;
   }).join('');
+
+  // Ré-essaie de garder la position de scroll (évite le “saut” visuel)
+  listEl.scrollTop = prevScrollTop;
 }
 
 async function sendFeedComment(postId) {
@@ -764,8 +788,21 @@ function startFeedRealtime() {
       if (p.type === 'comment') {
         const parentId = p.reference_id != null ? String(p.reference_id) : '';
         if (!parentId) return;
-        const listEl = $(`feed-comments-list-${parentId}`);
-        if (listEl) loadFeedComments(parentId);
+        // Si le fil commentaires est ouvert : recharge, sinon on incrémente un compteur.
+        if (_msgState.feedOpenCommentIds.has(parentId)) {
+          _msgState.feedCommentUnreadByPost[parentId] = 0;
+          const ub = $(`feed-unread-${parentId}`);
+          if (ub) ub.style.display = 'none';
+          const listEl = $(`feed-comments-list-${parentId}`);
+          if (listEl) loadFeedComments(parentId);
+        } else {
+          _msgState.feedCommentUnreadByPost[parentId] = (_msgState.feedCommentUnreadByPost[parentId] || 0) + 1;
+          const ub = $(`feed-unread-${parentId}`);
+          if (ub) {
+            ub.textContent = _msgState.feedCommentUnreadByPost[parentId];
+            ub.style.display = 'inline-flex';
+          }
+        }
         return;
       }
       if (p.auteur_id === user.id) return;
