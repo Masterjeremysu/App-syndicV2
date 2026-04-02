@@ -103,6 +103,10 @@ let _msgState = {
   feedCommentSigByPost: {},
   /** Compteur des commentaires reçus depuis la dernière ouverture du fil */
   feedCommentUnreadByPost: {},
+  /** Thread commentaires du mur : conversation dédiée par post */
+  activeFeedThreadPostId: null,
+  feedThreadState: { loaded: false, oldestLoadedAt: null, hasMore: false },
+  feedThreadRenderedCommentIds: new Set(),
 };
 const MSG_DRAFTS_KEY = 'coprosync_msg_drafts_v1';
 
@@ -368,6 +372,10 @@ async function openFeed() {
   const main = $('msg-main');
   if (!main) return;
 
+  // Reset thread state/layout de droite (evite un état résiduel sur mobile)
+  const split = $('feed-split');
+  if (split) split.classList.remove('thread-active');
+
   const chipHtml = FEED_COMMUNITY_CATS.map(c => {
     const active = _msgState.feedFilter === c.id;
     const cnt = feedCountForFilter(c.id);
@@ -406,39 +414,52 @@ async function openFeed() {
       <div class="feed-cat-chips-scroll" id="feed-cat-chips">${chipHtml}</div>
     </div>
 
-    <div class="feed-compose feed-compose--community" id="feed-compose">
-      <div class="feed-compose-ribbon"><span>✏️</span> Publier dans une rubrique</div>
-      <div class="feed-compose-cats" id="feed-compose-cats" onclick="onFeedComposeCatRowClick(event)">${composeCatHtml}</div>
-      <div class="feed-compose-box">
-        <div class="feed-compose-av" style="background:${avatarColor(displayNameFromProfile(profile,user?.email))}">
-          ${(profile?.prenom||profile?.nom||user?.email||'?').charAt(0).toUpperCase()}
-        </div>
-        <div class="feed-compose-fields">
-          <div class="feed-titre-panneau-row" id="feed-titre-panneau-row" style="display:${_msgState.feedComposeCategory === 'panneau' ? '' : 'none'};">
-            <input type="text" class="feed-titre-panneau-input" id="feed-titre-panneau" maxlength="120"
-              placeholder="Titre de l’affiche (ex. Travaux ascenseur — semaine du 12)">
+    <div class="feed-split" id="feed-split">
+      <div class="feed-left-pane" id="feed-left-pane">
+        <div class="feed-compose feed-compose--community" id="feed-compose">
+          <div class="feed-compose-ribbon"><span>✏️</span> Publier dans une rubrique</div>
+          <div class="feed-compose-cats" id="feed-compose-cats" onclick="onFeedComposeCatRowClick(event)">${composeCatHtml}</div>
+          <div class="feed-compose-box">
+            <div class="feed-compose-av" style="background:${avatarColor(displayNameFromProfile(profile,user?.email))}">
+              ${(profile?.prenom||profile?.nom||user?.email||'?').charAt(0).toUpperCase()}
+            </div>
+            <div class="feed-compose-fields">
+              <div class="feed-titre-panneau-row" id="feed-titre-panneau-row" style="display:${_msgState.feedComposeCategory === 'panneau' ? '' : 'none'};">
+                <input type="text" class="feed-titre-panneau-input" id="feed-titre-panneau" maxlength="120"
+                  placeholder="Titre de l’affiche (ex. Travaux ascenseur — semaine du 12)">
+              </div>
+              <textarea class="feed-compose-input" id="feed-input" placeholder="…" rows="1"
+                oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';saveCurrentDraft()"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey&&window.innerWidth>768){event.preventDefault();publishFeedPost();}"></textarea>
+            </div>
           </div>
-          <textarea class="feed-compose-input" id="feed-input" placeholder="…" rows="1"
-            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';saveCurrentDraft()"
-            onkeydown="if(event.key==='Enter'&&!event.shiftKey&&window.innerWidth>768){event.preventDefault();publishFeedPost();}"></textarea>
+          <div class="feed-compose-actions">
+            <span class="feed-compose-hint">Entrée pour envoyer · Maj+Entrée pour sauter une ligne</span>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button type="button" class="btn btn-ghost btn-sm" onclick="pickFeedEmoji(event)">😊</button>
+              <button type="button" class="btn btn-primary btn-sm" onclick="publishFeedPost()">Publier dans la communauté</button>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="feed-compose-actions">
-        <span class="feed-compose-hint">Entrée pour envoyer · Maj+Entrée pour sauter une ligne</span>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button type="button" class="btn btn-ghost btn-sm" onclick="pickFeedEmoji(event)">😊</button>
-          <button type="button" class="btn btn-primary btn-sm" onclick="publishFeedPost()">Publier dans la communauté</button>
-        </div>
-      </div>
-    </div>
 
-    <div class="feed-scroll feed-scroll--community" id="feed-scroll">
-      <div style="text-align:center;padding:32px;color:var(--text-3);">Chargement du fil…</div>
+        <div class="feed-scroll feed-scroll--community" id="feed-left-scroll">
+          <div style="text-align:center;padding:32px;color:var(--text-3);">Chargement du fil…</div>
+        </div>
+      </div>
+
+      <div class="feed-thread-pane" id="feed-thread-pane">
+        <div class="feed-thread-empty" id="feed-thread-empty">
+          <div style="font-size:42px;margin-bottom:10px;">💬</div>
+          <div style="font-family:var(--font-head);font-weight:800;font-size:16px;margin-bottom:6px;">Ouvrez un message</div>
+          <div style="font-size:13px;color:var(--text-3);line-height:1.5;">
+            Sélectionnez un post à gauche pour voir la conversation et les nouveaux commentaires.
+          </div>
+        </div>
+      </div>
     </div>`;
 
   setFeedComposeCategory(_msgState.feedComposeCategory);
   await loadFeed();
-  startFeedCommentsPoll();
   restoreCurrentDraft();
 }
 
@@ -474,7 +495,7 @@ function feedCatAccent(cat) {
 }
 
 function renderFeed() {
-  const el = $('feed-scroll');
+  const el = $('feed-left-scroll');
   if (!el) return;
   const rows = sortFeedPosts((_msgState.feed || []).filter(p => p.type !== 'comment'));
   const f = _msgState.feedFilter || 'tout';
@@ -608,24 +629,272 @@ function renderFeedPost(p) {
       ${EMOJIS.slice(0,4).map(e =>
         `<button class="feed-action-btn" onclick="toggleFeedReaction('${p.id}','${e}')">${e}</button>`
       ).join('')}
-      <button class="feed-action-btn" onclick="toggleFeedComments('${p.id}')">
+      <button class="feed-action-btn" onclick="openFeedThread('${p.id}')">
         💬 Commenter
         <span class="feed-unread-comment-badge" id="feed-unread-${p.id}" style="display:${unread>0 ? 'inline-flex' : 'none'};">${unread>0 ? unread : ''}</span>
       </button>
     </div>
-    <div id="feed-comments-${p.id}" style="display:none;">
-      <div class="feed-comments" id="feed-comments-list-${p.id}"></div>
-      <div class="feed-comment-input-row" style="padding:0 0 4px;">
-        <div class="feed-compose-av" style="width:28px;height:28px;font-size:12px;background:${avatarColor(displayNameFromProfile(profile,user?.email))};">${(profile?.prenom||profile?.nom||user?.email||'?').charAt(0).toUpperCase()}</div>
-        <input class="feed-comment-input" id="feed-comment-input-${p.id}"
-          placeholder="Écrire un commentaire…"
-          onkeydown="if(event.key==='Enter'){event.preventDefault();sendFeedComment('${p.id}');}">
-        <button class="chat-send" style="width:34px;height:34px;flex-shrink:0;" onclick="sendFeedComment('${p.id}')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
-        </button>
+  </div>`;
+}
+
+function closeFeedThread() {
+  _msgState.activeFeedThreadPostId = null;
+  _msgState.feedThreadState = { loaded: false, oldestLoadedAt: null, hasMore: false };
+  _msgState.feedThreadRenderedCommentIds = new Set();
+  const split = $('feed-split');
+  if (split) split.classList.remove('thread-active');
+  const pane = $('feed-thread-pane');
+  if (!pane) return;
+  pane.innerHTML = `
+    <div class="feed-thread-empty" id="feed-thread-empty">
+      <div style="font-size:42px;margin-bottom:10px;">💬</div>
+      <div style="font-family:var(--font-head);font-weight:800;font-size:16px;margin-bottom:6px;">Ouvrez un message</div>
+      <div style="font-size:13px;color:var(--text-3);line-height:1.5;">
+        Sélectionnez un post à gauche pour voir la conversation et les nouveaux commentaires.
       </div>
     </div>
+  `;
+}
+
+function renderFeedThreadPostHeader(p) {
+  const auteur = p.profiles ? displayName(p.profiles.prenom, p.profiles.nom, p.profiles.email, 'Résident') : 'Résident';
+  const initiale = auteur.charAt(0).toUpperCase();
+  const time = depuisJours(p.created_at);
+  const cat = feedPostCategory(p);
+  const cmeta = feedCatMeta(cat);
+  const accent = feedCatAccent(cat);
+  const badge = `<span class="feed-post-cat-badge" style="--feed-cat:${accent}">${cmeta.emoji} ${escHtml(cmeta.label)}</span>`;
+
+  const affiche = p.epingle && p.type === 'post';
+  const titreBloc = p.type === 'post' && p.titre_panneau
+    ? `<div class="feed-post-affiche-titre" style="margin-bottom:10px;">${escHtml(p.titre_panneau)}</div>`
+    : '';
+
+  const isMine = p.auteur_id === user?.id;
+  const pinBtn = canManageAnnonces() && p.type === 'post'
+    ? `<button type="button" class="btn btn-ghost btn-sm" style="padding:4px 8px;" onclick="toggleFeedPin('${p.id}')">${p.epingle ? '📌' : '📍'} ${p.epingle ? 'Épinglé' : 'Épingler'}</button>`
+    : '';
+  const delBtn = isMine
+    ? `<button type="button" class="btn btn-ghost btn-sm" style="padding:4px 8px;" onclick="deleteFeedPost('${p.id}')">✕ Supprimer</button>`
+    : '';
+
+  const backBtn = `<button class="msg-back-btn feed-thread-back-btn" onclick="closeFeedThread()" title="Retour">←</button>`;
+
+  return `
+    <div class="feed-thread-header">
+      ${backBtn}
+      <div class="feed-thread-head-left">
+        <div class="feed-post-av" style="background:${avatarColor(auteur)}; width:42px; height:42px; font-size:18px;">${initiale}</div>
+        <div class="feed-thread-head-meta">
+          <div class="feed-thread-head-author">${escHtml(auteur)} ${badge}</div>
+          <div class="feed-thread-head-time">${time}</div>
+        </div>
+      </div>
+      <div class="feed-thread-head-actions">
+        ${pinBtn}
+        ${delBtn}
+      </div>
+    </div>
+    <div class="feed-thread-post-body ${affiche ? 'feed-post--affiche' : ''}">
+      ${titreBloc}
+      ${p.type === 'post'
+        ? `<div class="feed-post-body" style="margin:0;">${escHtml(p.contenu)}</div>`
+        : p.type === 'ticket'
+          ? `<div class="feed-event-card ticket">🔧 ${escHtml(p.contenu)}</div>`
+          : p.type === 'resolved'
+            ? `<div class="feed-event-card resolved">✅ ${escHtml(p.contenu)}</div>`
+            : p.type === 'vote'
+              ? `<div class="feed-event-card vote">🗳️ ${escHtml(p.contenu)}</div>`
+              : p.type === 'member'
+                ? `<div class="feed-event-card member">👋 ${escHtml(p.contenu)}</div>`
+                : `<div class="feed-post-body" style="margin:0;">${escHtml(p.contenu)}</div>`
+      }
+    </div>
+  `;
+}
+
+function renderFeedCommentLine(c) {
+  const auteur = c.profiles ? displayName(c.profiles.prenom, c.profiles.nom, c.profiles.email, 'Résident') : 'Résident';
+  const color = avatarColor(auteur);
+  return `<div class="feed-comment">
+    <div class="feed-comment-av" style="background:${color};">${auteur.charAt(0).toUpperCase()}</div>
+    <div class="feed-comment-bubble">
+      <div class="feed-comment-author">${escHtml(auteur)} <span style="font-weight:400;color:var(--text-3);">${depuisJours(c.created_at)}</span></div>
+      ${escHtml(c.contenu)}
+    </div>
   </div>`;
+}
+
+function setFeedThreadHasMore(hasMore, oldestLoadedAt) {
+  _msgState.feedThreadState.hasMore = !!hasMore;
+  _msgState.feedThreadState.oldestLoadedAt = oldestLoadedAt || null;
+}
+
+async function loadFeedThreadComments(postId, { older = false } = {}) {
+  const sid = String(postId);
+  const listEl = $('feed-thread-comments-list');
+  const scrollEl = $('feed-thread-scroll');
+  const btnEl = $('feed-thread-load-more-btn');
+  if (!listEl || !btnEl || !scrollEl) return;
+
+  const limit = 30;
+
+  if (!older) {
+    _msgState.feedThreadRenderedCommentIds = new Set();
+    listEl.innerHTML = `<div style="text-align:center;padding:18px;color:var(--text-3);">Chargement des commentaires…</div>`;
+  }
+
+  const baseQ = sb.from('feed_posts')
+    .select('*, profiles(id,prenom,nom,email)')
+    .eq('reference_id', sid)
+    .eq('type', 'comment');
+
+  let q = baseQ;
+  if (older && _msgState.feedThreadState.oldestLoadedAt) {
+    q = q.lt('created_at', _msgState.feedThreadState.oldestLoadedAt);
+  }
+
+  const { data } = await q
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  const rows = data || [];
+  if (!rows.length) {
+    if (!older) listEl.innerHTML = '<div style="padding:10px 0 6px;font-size:12px;color:var(--text-3);">Aucun commentaire pour le moment.</div>';
+    setFeedThreadHasMore(false, null);
+    btnEl.style.display = 'none';
+    return;
+  }
+
+  const commentsAsc = [...rows].reverse();
+  const hasMore = rows.length === limit;
+  const oldest = commentsAsc[0]?.created_at || null;
+  setFeedThreadHasMore(hasMore, oldest);
+  btnEl.style.display = hasMore ? 'block' : 'none';
+
+  const newIds = commentsAsc.map(x => String(x.id));
+  newIds.forEach(id => _msgState.feedThreadRenderedCommentIds.add(id));
+
+  if (!older) {
+    listEl.innerHTML = commentsAsc.map(renderFeedCommentLine).join('');
+    return;
+  }
+
+  // Pré-pend en gardant la position de scroll
+  const prevScrollTop = scrollEl.scrollTop;
+  const prevScrollHeight = scrollEl.scrollHeight;
+  listEl.insertAdjacentHTML('afterbegin', commentsAsc.map(renderFeedCommentLine).join(''));
+  const newScrollHeight = scrollEl.scrollHeight;
+  scrollEl.scrollTop = newScrollHeight - prevScrollHeight + prevScrollTop;
+}
+
+async function appendFeedThreadComment(c) {
+  const sid = String(_msgState.activeFeedThreadPostId || '');
+  if (!sid || String(c.reference_id) !== sid) return;
+  const id = String(c.id);
+  if (_msgState.feedThreadRenderedCommentIds.has(id)) return;
+
+  _msgState.feedThreadRenderedCommentIds.add(id);
+  const listEl = $('feed-thread-comments-list');
+  const scrollEl = $('feed-thread-scroll');
+  if (!listEl || !scrollEl) return;
+
+  const oldIsAtBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 30;
+  listEl.insertAdjacentHTML('beforeend', renderFeedCommentLine(c));
+  if (oldIsAtBottom) scrollEl.scrollTop = scrollEl.scrollHeight;
+
+  // reset unread badge (si jamais)
+  _msgState.feedCommentUnreadByPost[sid] = 0;
+  const ub = $(`feed-unread-${sid}`);
+  if (ub) ub.style.display = 'none';
+}
+
+async function openFeedThread(postId) {
+  const sid = String(postId);
+  _msgState.activeFeedThreadPostId = sid;
+  _msgState.feedThreadRenderedCommentIds = new Set();
+  _msgState.feedThreadState = { loaded: false, oldestLoadedAt: null, hasMore: false };
+  _msgState.feedCommentUnreadByPost[sid] = 0;
+
+  const split = $('feed-split');
+  if (split) split.classList.add('thread-active');
+
+  // Reset unread badge on left card
+  const ub = $(`feed-unread-${sid}`);
+  if (ub) ub.style.display = 'none';
+
+  let post = _msgState.feed.find(p => String(p.id) === sid);
+  if (!post) {
+    const { data } = await sb.from('feed_posts')
+      .select('*, profiles(id,prenom,nom,email)')
+      .eq('id', sid).single();
+    post = data;
+  }
+  if (!post) return;
+
+  const threadPane = $('feed-thread-pane');
+  if (!threadPane) return;
+
+  threadPane.innerHTML = `
+    <div class="feed-thread-wrap">
+      ${renderFeedThreadPostHeader(post)}
+      <div class="feed-thread-scroll" id="feed-thread-scroll">
+        <div class="feed-thread-comments">
+          <div id="feed-thread-comments-list"></div>
+          <div style="padding:10px 0;text-align:center;">
+            <button class="btn btn-secondary btn-sm" id="feed-thread-load-more-btn" onclick="loadFeedThreadOlder()">Charger plus</button>
+          </div>
+        </div>
+      </div>
+      <div class="feed-thread-composer">
+        <div class="feed-thread-composer-box">
+          <textarea class="feed-compose-input" id="feed-thread-comment-input" placeholder="Écrire un commentaire…"
+            rows="1"
+            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendFeedThreadComment();}"></textarea>
+          <button class="chat-send" style="width:44px;height:44px;" onclick="sendFeedThreadComment()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  // cache: ré-après re-render DOM
+  await loadFeedThreadComments(sid, { older: false });
+}
+
+function loadFeedThreadOlder() {
+  const sid = _msgState.activeFeedThreadPostId;
+  if (!sid) return;
+  loadFeedThreadComments(sid, { older: true });
+}
+
+async function sendFeedThreadComment() {
+  const sid = _msgState.activeFeedThreadPostId;
+  if (!sid) return;
+  const input = $('feed-thread-comment-input');
+  if (!input) return;
+  const contenu = (input.value || '').trim();
+  if (!contenu) return;
+  input.value = '';
+  input.style.height = 'auto';
+
+  // Insert + récupère profils pour rendu immédiat
+  const { data: newC, error } = await sb.from('feed_posts')
+    .insert({
+      auteur_id: user.id,
+      contenu,
+      type: 'comment',
+      reference_id: sid,
+    })
+    .select('*, profiles(id,prenom,nom,email)')
+    .single();
+
+  if (error) { toast('Erreur commentaire', 'err'); return; }
+
+  // Ajout optimiste (anti-doublon par Set)
+  const withRef = { ...newC, reference_id: sid };
+  await appendFeedThreadComment(withRef);
 }
 
 async function publishFeedPost() {
@@ -788,14 +1057,24 @@ function startFeedRealtime() {
       if (p.type === 'comment') {
         const parentId = p.reference_id != null ? String(p.reference_id) : '';
         if (!parentId) return;
-        // Si le fil commentaires est ouvert : recharge, sinon on incrémente un compteur.
-        if (_msgState.feedOpenCommentIds.has(parentId)) {
+
+        const isThreadActive = _msgState.activeFeedThreadPostId
+          && String(_msgState.activeFeedThreadPostId) === parentId;
+
+        if (isThreadActive) {
+          // Append dans le thread ouvert
+          const { data: prof } = await sb.from('profiles')
+            .select('id,prenom,nom,email')
+            .eq('id', p.auteur_id)
+            .single();
+          const commentRow = { ...p, profiles: prof, reference_id: parentId };
+          await appendFeedThreadComment(commentRow);
+
           _msgState.feedCommentUnreadByPost[parentId] = 0;
           const ub = $(`feed-unread-${parentId}`);
           if (ub) ub.style.display = 'none';
-          const listEl = $(`feed-comments-list-${parentId}`);
-          if (listEl) loadFeedComments(parentId);
         } else {
+          // Compteur sur la carte du post
           _msgState.feedCommentUnreadByPost[parentId] = (_msgState.feedCommentUnreadByPost[parentId] || 0) + 1;
           const ub = $(`feed-unread-${parentId}`);
           if (ub) {
@@ -831,17 +1110,7 @@ function startFeedRealtime() {
         _msgState.feedReactions[tid].push(r);
         const post = _msgState.feed.find(p => String(p.id) === tid);
         const postEl = $(`post-${tid}`);
-        const keepComments = _msgState.feedOpenCommentIds.has(tid);
-        if (postEl && post) {
-          postEl.outerHTML = renderFeedPost(post);
-          if (keepComments) {
-            const box = $(`feed-comments-${tid}`);
-            if (box) {
-              box.style.display = 'block';
-              loadFeedComments(tid);
-            }
-          }
-        }
+        if (postEl && post) postEl.outerHTML = renderFeedPost(post);
       }
     })
     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'feed_posts' }, payload => {
@@ -850,8 +1119,9 @@ function startFeedRealtime() {
       if (!id) return;
       if (oldRow.type === 'comment' && oldRow.reference_id != null) {
         const pid = String(oldRow.reference_id);
-        if (_msgState.activeChanType === 'feed' && $(`feed-comments-list-${pid}`)) {
-          loadFeedComments(pid);
+        if (_msgState.activeFeedThreadPostId && String(_msgState.activeFeedThreadPostId) === pid) {
+          // Rechargement thread (rare) : évite les états incohérents
+          loadFeedThreadComments(pid, { older: false });
         }
         return;
       }
