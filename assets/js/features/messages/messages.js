@@ -97,8 +97,42 @@ let _msgState = {
   unreadByConv: {},
   readCursorByConv: {},
   drafts: {},
+  /** IDs des posts dont le fil commentaires est ouvert (temps réel + re-render) */
+  feedOpenCommentIds: new Set(),
 };
 const MSG_DRAFTS_KEY = 'coprosync_msg_drafts_v1';
+
+let _feedCommentsPollTimer = null;
+
+function startFeedCommentsPoll() {
+  stopFeedCommentsPoll();
+  _feedCommentsPollTimer = setInterval(() => {
+    if (_msgState.activeChanType !== 'feed') return;
+    if (!_msgState.feedOpenCommentIds.size) return;
+    _msgState.feedOpenCommentIds.forEach(sid => {
+      const listEl = $(`feed-comments-list-${sid}`);
+      if (listEl) loadFeedComments(sid);
+    });
+  }, 4000);
+}
+
+function stopFeedCommentsPoll() {
+  if (_feedCommentsPollTimer) {
+    clearInterval(_feedCommentsPollTimer);
+    _feedCommentsPollTimer = null;
+  }
+}
+
+/** Ré-ouvre les fils commentaires marqués après re-render du DOM */
+function restoreFeedOpenCommentThreads() {
+  _msgState.feedOpenCommentIds.forEach(sid => {
+    const box = $(`feed-comments-${sid}`);
+    if (box) {
+      box.style.display = 'block';
+      loadFeedComments(sid);
+    }
+  });
+}
 
 function loadMsgDrafts() {
   try {
@@ -400,6 +434,7 @@ async function openFeed() {
 
   setFeedComposeCategory(_msgState.feedComposeCategory);
   await loadFeed();
+  startFeedCommentsPoll();
   restoreCurrentDraft();
 }
 
@@ -414,11 +449,12 @@ async function loadFeed() {
     .select('*')
     .eq('target_type', 'post');
 
-  // Groupe les réactions par post
+  // Groupe les réactions par post (clés string)
   _msgState.feedReactions = {};
   (reactions || []).forEach(r => {
-    if (!_msgState.feedReactions[r.target_id]) _msgState.feedReactions[r.target_id] = [];
-    _msgState.feedReactions[r.target_id].push(r);
+    const tid = String(r.target_id);
+    if (!_msgState.feedReactions[tid]) _msgState.feedReactions[tid] = [];
+    _msgState.feedReactions[tid].push(r);
   });
 
   _msgState.feed = sortFeedPosts(posts || []);
@@ -448,8 +484,14 @@ function renderFeed() {
     badge.style.display = n > 0 ? '' : 'none';
   });
 
+  const prunableVisible = new Set(rows.filter(inFilter).map(p => String(p.id)));
+  for (const cid of [..._msgState.feedOpenCommentIds]) {
+    if (!prunableVisible.has(String(cid))) _msgState.feedOpenCommentIds.delete(cid);
+  }
+
   const filtered = rows.filter(inFilter);
   if (!filtered.length) {
+    _msgState.feedOpenCommentIds.clear();
     const cm = feedCatMeta(f);
     el.innerHTML = `<div class="feed-empty-cat">
       <div class="feed-empty-cat-ico">${cm.emoji}</div>
@@ -489,6 +531,7 @@ function renderFeed() {
   }
 
   el.innerHTML = html;
+  restoreFeedOpenCommentThreads();
 }
 
 function renderFeedPost(p) {
@@ -503,8 +546,8 @@ function renderFeedPost(p) {
   const accent = feedCatAccent(cat);
   const badge = `<span class="feed-post-cat-badge" style="--feed-cat:${accent}">${cmeta.emoji} ${escHtml(cmeta.label)}</span>`;
 
-  // Réactions groupées par emoji
-  const reacts = _msgState.feedReactions[p.id] || [];
+  // Réactions groupées par emoji (clé string = ids Supabase)
+  const reacts = _msgState.feedReactions[String(p.id)] || [];
   const reactGroups = {};
   reacts.forEach(r => {
     if (!reactGroups[r.emoji]) reactGroups[r.emoji] = { count: 0, mine: false };
@@ -625,41 +668,59 @@ async function toggleFeedPin(postId) {
 }
 
 async function toggleFeedReaction(postId, emoji) {
-  const reacts = _msgState.feedReactions[postId] || [];
+  const sid = String(postId);
+  let reacts = _msgState.feedReactions[sid] || [];
   const existing = reacts.find(r => r.user_id === user.id && r.emoji === emoji);
   if (existing) {
     await sb.from('reactions').delete().eq('id', existing.id);
-    _msgState.feedReactions[postId] = reacts.filter(r => r.id !== existing.id);
+    reacts = reacts.filter(r => r.id !== existing.id);
+    _msgState.feedReactions[sid] = reacts;
   } else {
     const { data } = await sb.from('reactions').insert({
-      user_id: user.id, target_id: postId, target_type: 'post', emoji
+      user_id: user.id, target_id: sid, target_type: 'post', emoji
     }).select().single();
-    if (!_msgState.feedReactions[postId]) _msgState.feedReactions[postId] = [];
-    if (data) _msgState.feedReactions[postId].push(data);
+    if (!_msgState.feedReactions[sid]) _msgState.feedReactions[sid] = [];
+    if (data) _msgState.feedReactions[sid].push(data);
+    reacts = _msgState.feedReactions[sid];
   }
-  // Re-render juste ce post
-  const postEl = $(`post-${postId}`);
-  const post = _msgState.feed.find(p => p.id === postId);
-  if (postEl && post) postEl.outerHTML = renderFeedPost(post);
+  const postEl = $(`post-${sid}`);
+  const post = _msgState.feed.find(p => String(p.id) === sid);
+  const keepComments = _msgState.feedOpenCommentIds.has(sid);
+  if (postEl && post) {
+    postEl.outerHTML = renderFeedPost(post);
+    if (keepComments) {
+      const box = $(`feed-comments-${sid}`);
+      if (box) {
+        box.style.display = 'block';
+        await loadFeedComments(sid);
+      }
+    }
+  }
 }
 
 async function toggleFeedComments(postId) {
-  // Ignore les posts optimistes non sauvegardés
-  if (postId.startsWith('tmp-')) return;
-  const el = $(`feed-comments-${postId}`);
+  if (String(postId).startsWith('tmp-')) return;
+  const sid = String(postId);
+  const el = $(`feed-comments-${sid}`);
   if (!el) return;
   const isOpen = el.style.display !== 'none';
   el.style.display = isOpen ? 'none' : 'block';
-  if (!isOpen) await loadFeedComments(postId);
+  if (!isOpen) {
+    _msgState.feedOpenCommentIds.add(sid);
+    await loadFeedComments(sid);
+  } else {
+    _msgState.feedOpenCommentIds.delete(sid);
+  }
 }
 
 async function loadFeedComments(postId) {
-  if (!postId || postId.startsWith('tmp-')) return;
-  const listEl = $(`feed-comments-list-${postId}`);
+  if (!postId || String(postId).startsWith('tmp-')) return;
+  const sid = String(postId);
+  const listEl = $(`feed-comments-list-${sid}`);
   if (!listEl) return;
   const { data } = await sb.from('feed_posts')
     .select('*, profiles(id,prenom,nom,email)')
-    .eq('reference_id', postId)
+    .eq('reference_id', sid)
     .eq('type', 'comment')
     .order('created_at', { ascending: true });
   if (!data?.length) { listEl.innerHTML = '<div style="padding:4px 0 8px;font-size:12px;color:var(--text-3);">Aucun commentaire — soyez le premier !</div>'; return; }
@@ -677,14 +738,15 @@ async function loadFeedComments(postId) {
 }
 
 async function sendFeedComment(postId) {
-  const input = $(`feed-comment-input-${postId}`);
+  const sid = String(postId);
+  const input = $(`feed-comment-input-${sid}`);
   const contenu = input?.value.trim();
   if (!contenu) return;
   input.value = '';
   await sb.from('feed_posts').insert({
-    auteur_id: user.id, contenu, type: 'comment', reference_id: postId
+    auteur_id: user.id, contenu, type: 'comment', reference_id: sid
   });
-  await loadFeedComments(postId);
+  await loadFeedComments(sid);
 }
 
 async function deleteFeedPost(postId) {
@@ -700,8 +762,10 @@ function startFeedRealtime() {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'feed_posts' }, async payload => {
       const p = payload.new;
       if (p.type === 'comment') {
-        const listEl = $(`feed-comments-list-${p.reference_id}`);
-        if (listEl) loadFeedComments(p.reference_id);
+        const parentId = p.reference_id != null ? String(p.reference_id) : '';
+        if (!parentId) return;
+        const listEl = $(`feed-comments-list-${parentId}`);
+        if (listEl) loadFeedComments(parentId);
         return;
       }
       if (p.auteur_id === user.id) return;
@@ -725,17 +789,36 @@ function startFeedRealtime() {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reactions' }, payload => {
       const r = payload.new;
       if (r.target_type === 'post' && r.user_id !== user.id) {
-        if (!_msgState.feedReactions[r.target_id]) _msgState.feedReactions[r.target_id] = [];
-        _msgState.feedReactions[r.target_id].push(r);
-        const post = _msgState.feed.find(p => p.id === r.target_id);
-        const postEl = $(`post-${r.target_id}`);
-        if (postEl && post) postEl.outerHTML = renderFeedPost(post);
+        const tid = String(r.target_id);
+        if (!_msgState.feedReactions[tid]) _msgState.feedReactions[tid] = [];
+        _msgState.feedReactions[tid].push(r);
+        const post = _msgState.feed.find(p => String(p.id) === tid);
+        const postEl = $(`post-${tid}`);
+        const keepComments = _msgState.feedOpenCommentIds.has(tid);
+        if (postEl && post) {
+          postEl.outerHTML = renderFeedPost(post);
+          if (keepComments) {
+            const box = $(`feed-comments-${tid}`);
+            if (box) {
+              box.style.display = 'block';
+              loadFeedComments(tid);
+            }
+          }
+        }
       }
     })
     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'feed_posts' }, payload => {
-      const id = payload.old?.id;
+      const oldRow = payload.old;
+      const id = oldRow?.id;
       if (!id) return;
-      _msgState.feed = _msgState.feed.filter(x => x.id !== id);
+      if (oldRow.type === 'comment' && oldRow.reference_id != null) {
+        const pid = String(oldRow.reference_id);
+        if (_msgState.activeChanType === 'feed' && $(`feed-comments-list-${pid}`)) {
+          loadFeedComments(pid);
+        }
+        return;
+      }
+      _msgState.feed = _msgState.feed.filter(x => String(x.id) !== String(id));
       if (_msgState.activeChanType === 'feed') renderFeed();
     })
     .subscribe();
@@ -787,6 +870,7 @@ async function computeUnreadByConversation() {
 
 async function openConv(convId) {
   saveCurrentDraft();
+  stopFeedCommentsPoll();
   _msgState.activeConvId = convId;
   _msgState.activeChanType = _msgState.conversations.find(c=>c.id===convId)?.type === 'prive' ? 'dm' : 'chan';
 
