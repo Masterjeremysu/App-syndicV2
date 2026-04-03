@@ -57,7 +57,7 @@ function openNewTicket() {
   photoFile = null;
   // Cache/affiche Critique et hint selon rôle
   const critEl = $('urg-critique');
-    if (critEl) critEl.style.display = Permissions.has('tickets.edit_status') ? '' : 'none';
+  if (critEl) critEl.style.display = isManager() ? '' : 'none';
   const hint = $('urgence-hint');
   if (hint) hint.style.display = isManager() ? 'none' : 'block';
   bindTicketDraftListeners();

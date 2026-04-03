@@ -1,8 +1,10 @@
 // ── INIT ──
-let _initDone = false;
+let _initDone = false; // bloque le listener jusqu'au signOut initial
 
 sb.auth.onAuthStateChange(async (event, session) => {
   dbg('[auth]', event, !!session?.user, '| initDone:', _initDone);
+
+  // Ignorer tous les events avant que le signOut initial soit terminé
   if (!_initDone) return;
 
   if (!session?.user || event === 'SIGNED_OUT') {
@@ -12,6 +14,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
     user = null; profile = null;
     return;
   }
+  // Reset bouton dans tous les cas
   $('auth-btn').disabled = false;
   $('auth-btn-text').textContent = 'Se connecter';
 
@@ -19,6 +22,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
   user = session.user;
   await loadProfile();
 
+  // Vérifie si le compte est suspendu
   if (profile?.actif === false) {
     await sb.auth.signOut();
     showAuthError('⊘ Votre compte a été suspendu. Contactez le conseil syndical.');
@@ -44,17 +48,18 @@ function initConnectionStatus() {
     banner.className = 'connection-banner';
     document.body.appendChild(banner);
   }
+
   const update = () => {
     const online = navigator.onLine;
     if (!online) {
       _connWasOffline = true;
-      banner.textContent = '⚠ Connexion perdue - mode dégradé';
+      banner.textContent = '⚠ Connexion perdue - mode degrade';
       banner.classList.add('show', 'offline');
       banner.classList.remove('online');
       return;
     }
     if (_connWasOffline) {
-      banner.textContent = '✓ Connexion rétablie';
+      banner.textContent = '✓ Connexion retablie';
       banner.classList.add('show', 'online');
       banner.classList.remove('offline');
       setTimeout(() => banner.classList.remove('show'), 2200);
@@ -63,6 +68,7 @@ function initConnectionStatus() {
       banner.classList.remove('show');
     }
   };
+
   window.addEventListener('online', update);
   window.addEventListener('offline', update);
   update();
@@ -81,8 +87,7 @@ async function startApp() {
     initUI();
     initConnectionStatus();
     await loadAll();
-    // Page d'accueil selon le rôle
-nav(Permissions.getDefaultPage());
+    nav('dashboard');
     registerSW();
     startRealtime();
     initSwipeToClose();
@@ -92,12 +97,15 @@ nav(Permissions.getDefaultPage());
     // Vérifie toutes les 2 minutes si le compte est toujours actif
     setInterval(async () => {
       const { data } = await sb.from('profiles').select('actif').eq('id', user.id).single();
-      if (data?.actif === false) { await sb.auth.signOut(); location.reload(); }
+      if (data?.actif === false) {
+        await sb.auth.signOut();
+        location.reload();
+      }
     }, 2 * 60 * 1000);
   } catch(e) {
     err('[startApp] ERREUR:', e);
-    showAuthError('Erreur au démarrage de l\'application. Réessayez dans quelques secondes.');
-    toast('Erreur démarrage: ' + (e?.message || 'inconnue'), 'err');
+    showAuthError('Erreur au demarrage de l\'application. Reessayez dans quelques secondes.');
+    toast('Erreur demarrage: ' + (e?.message || 'inconnue'), 'err');
     _appStarted = false;
     $('login-screen').style.display = 'flex';
     $('app').style.display = 'none';
@@ -110,20 +118,27 @@ async function loadProfile() {
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000));
     const query = sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
     const { data, error } = await Promise.race([query, timeout]);
+    dbg('[loadProfile] data=', data, 'error=', error);
     if (data) {
       profile = data;
     } else {
+      // Pas de profil en base — profil minimal SANS forcer le rôle
+      // Le rôle vient de user_metadata si dispo
       const meta = user.user_metadata || {};
       profile = {
-        id: user.id, email: user.email,
-        nom: meta.nom || null, prenom: meta.prenom || null,
+        id: user.id,
+        email: user.email,
+        nom: meta.nom || null,
+        prenom: meta.prenom || null,
         role: meta.role || 'copropriétaire',
-        tour: meta.tour || null, lot: meta.lot || null,
+        tour: meta.tour || null,
+        lot: meta.lot || null,
       };
     }
     dbg('[loadProfile] role =', profile.role);
   } catch(e) {
     err('[loadProfile] CRASH/TIMEOUT:', e.message);
+    // En cas de timeout → réessaie une fois sans timeout
     try {
       const { data } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
       if (data) { profile = data; return; }
@@ -139,79 +154,49 @@ async function loadProfile() {
 
 function initUI() {
   if (!profile) return;
-
-  // Avatar dans la sidebar
   const init = (profile.nom || '').charAt(0).toUpperCase() + (profile.prenom || '').charAt(0).toUpperCase();
   const avEl = $('nav-av');
   avEl.textContent = init || '?';
   const roleCls = { administrateur:'role-admin', syndic:'role-syndic', membre_cs:'role-cs' };
   avEl.className = `user-av ${roleCls[profile.role] || ''}`;
   $('nav-nom').textContent = displayNameFromProfile(profile, user?.email);
-  const roleLabels = {
-    administrateur:'Administrateur',
-    syndic:'Syndic',
-    membre_cs:'Conseil Syndical',
-    'copropriétaire':'Copropriétaire'
-  };
+  const roleLabels = { administrateur:'Administrateur', syndic:'Syndic', membre_cs:'Conseil Syndical', 'copropriétaire':'Copropriétaire' };
   $('nav-role').textContent = roleLabels[profile.role] || profile.role;
 
-  // ── Visibilité du menu selon le rôle (v2) ──────────────────────
-  const accessible = getAccessiblePages();
-
-  // Cache tous les items manager et admin par défaut
-  document.querySelectorAll('.nav-manager-only').forEach(el => el.style.display = 'none');
-  document.querySelectorAll('.nav-admin-only').forEach(el => el.style.display = 'none');
-  document.querySelectorAll('.nav-syndic-only').forEach(el => el.style.display = 'none');
-
-  // Affiche selon les pages accessibles
-  document.querySelectorAll('.nav-item[data-page]').forEach(el => {
-    const page = el.getAttribute('data-page');
-    el.style.display = accessible.includes(page) ? '' : 'none';
-  });
-
-  // Sections de menu : afficher si au moins un item enfant est visible
-  document.querySelectorAll('.nav-section').forEach(section => {
-    // Cherche les items de navigation qui suivent cette section
-    let next = section.nextElementSibling;
-    let hasVisible = false;
-    while (next && !next.classList.contains('nav-section') && !next.classList.contains('sidebar-footer')) {
-      if (next.classList.contains('nav-item') && next.style.display !== 'none') {
-        hasVisible = true;
-        break;
+  // Visibilité du menu selon le rôle
+  if (isSyndicExterne()) {
+    // Syndic externe : uniquement le Rapport syndic
+    document.querySelectorAll('.nav-item, .nav-section').forEach(el => {
+      const page = el.getAttribute('data-page');
+      if (page !== 'rapport' && !el.classList.contains('nav-brand')) {
+        el.style.display = 'none';
       }
-      next = next.nextElementSibling;
-    }
-    section.style.display = hasVisible ? '' : 'none';
-  });
-
-  // Pour le syndic : la topbar "Signaler" ne doit pas apparaître
-  if (isSyndic()) {
-    const signalerBtn = document.querySelector('#topbar .btn-primary');
-    if (signalerBtn) signalerBtn.style.display = 'none';
-    // Masque le bouton Signaler dans la bottom nav
-    const bnSignaler = document.querySelector('.bn-signaler');
-    if (bnSignaler) bnSignaler.style.display = 'none';
+    });
+    // Affiche le rapport immédiatement
+    setTimeout(() => nav('rapport'), 100);
+  } else if (!isManager()) {
+    document.querySelectorAll('.nav-manager-only').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.nav-admin-only').forEach(el => el.style.display = 'none');
+  } else if (!isAdmin()) {
+    document.querySelectorAll('.nav-admin-only').forEach(el => el.style.display = 'none');
   }
 }
 
 async function loadAll() {
   try {
-    // Syndic : charge tickets, contrats, annonces, events pour son périmètre
-    if (isSyndic()) {
-      await Promise.all([
-        loadTickets(),
-        loadContrats(),
-        loadAnnonceCache(),
-        loadEvenementsCache(),
-      ]);
+    // Syndic externe → charge uniquement tickets et contrats pour le rapport
+    if (isSyndicExterne()) {
+      await Promise.all([loadTickets(), loadContrats()]);
       updateBadges();
+      if (currentPage === 'rapport') renderRapport();
       return;
     }
 
-    // Copropriétaire et managers : chargement standard
+    // Charge les tickets en priorité → dashboard s'affiche immédiatement
     await loadTickets();
     if (currentPage === 'dashboard') renderDashboard();
 
+    // Charge le reste en parallèle en arrière-plan
     const tasks = [];
     if (isManager()) tasks.push(loadContrats());
     tasks.push(loadCles());
@@ -222,6 +207,7 @@ async function loadAll() {
     if (isManager()) await loadJournal();
     updateBadges();
     checkNotifications();
+    // Re-render dashboard complet avec tous les widgets
     if (currentPage === 'dashboard') renderDashboard();
   } catch(e) {
     err('loadAll error:', e);
