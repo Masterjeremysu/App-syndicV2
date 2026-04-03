@@ -34,6 +34,9 @@ function renderPage(p) {
   else if (p === 'contacts') renderContacts();
   else if (p === 'documents') renderDocuments();
   else if (p === 'votes') renderVotes();
+    else if (p === 'permissions') {
+    if (!isAdmin()) { nav('dashboard'); return; }
+    renderPermissionsPage();
   else if (p === 'faq') renderFAQ();
 }
 
