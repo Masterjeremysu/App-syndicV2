@@ -82,7 +82,7 @@ async function startApp() {
     initConnectionStatus();
     await loadAll();
     // Page d'accueil selon le rôle
-    nav(getDefaultPage());
+nav(Permissions.getDefaultPage());
     registerSW();
     startRealtime();
     initSwipeToClose();
