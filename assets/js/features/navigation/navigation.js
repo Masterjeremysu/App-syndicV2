@@ -28,7 +28,7 @@ function nav(page, noClose) {
   const titles = {
     dashboard:'Vue d\'ensemble', tickets:'Signalements', map:'Carte',
     contrats:'Contrats', cles:'Clés', journal:'Journal', users:'Utilisateurs',
-    rapport:'Rapport syndic', notifications:'Notifications', profile:'Mon profil',
+    admin:'Admin · Accès & visibilité', rapport:'Rapport syndic', notifications:'Notifications', profile:'Mon profil',
     messages:'Messages', annonces:'Annonces', agenda:'Agenda',
     contacts:'Contacts & Urgences', documents:'Documents', votes:'Votes & Sondages',
     faq:'FAQ'
