@@ -479,21 +479,69 @@ function renderDashChart() {
 }
 
 const DASH_WIDGET_VISIBILITY_KEY = 'coprosync_dash_widget_visibility_v4';
+const DASH_WIDGET_SIZE_KEY = 'coprosync_dash_widget_sizes_v4';
+const DASH_EDIT_MODE_KEY = 'coprosync_dash_edit_mode_v1';
+
+function getDashboardEditMode() {
+  try { return localStorage.getItem(DASH_EDIT_MODE_KEY) === '1'; } catch (e) { return false; }
+}
+
+function setDashboardEditMode(enabled) {
+  try { localStorage.setItem(DASH_EDIT_MODE_KEY, enabled ? '1' : '0'); } catch (e) {}
+}
+
+function toggleDashboardEditMode() {
+  setDashboardEditMode(!getDashboardEditMode());
+  renderDashboard();
+}
+
+function getDashboardWidgetSizes() {
+  try { return JSON.parse(localStorage.getItem(DASH_WIDGET_SIZE_KEY) || '{}') || {}; } catch (e) { return {}; }
+}
+
+function setDashboardWidgetSizes(sizes) {
+  try { localStorage.setItem(DASH_WIDGET_SIZE_KEY, JSON.stringify(sizes)); } catch (e) {}
+}
+
+function getDashboardCardSize(config) {
+  var sizes = getDashboardWidgetSizes();
+  return sizes[config.key] || config.defaultSize || 'standard';
+}
+
+function getDashboardCardSpan(config) {
+  var size = getDashboardCardSize(config);
+  if (config.spans && config.spans[size]) return config.spans[size];
+  return config.span || 6;
+}
+
+function cycleDashboardWidgetSize(key) {
+  var state = getDashboardState();
+  var config = getDashboardWidgetCatalog(state).find(function(item) { return item.key === key; });
+  if (!config || !config.spans) return;
+  var order = ['compact', 'standard', 'hero'].filter(function(size) { return !!config.spans[size]; });
+  var sizes = getDashboardWidgetSizes();
+  var current = sizes[key] || config.defaultSize || order[0];
+  var next = order[(order.indexOf(current) + 1) % order.length];
+  sizes[key] = next;
+  setDashboardWidgetSizes(sizes);
+  renderDashboard();
+}
 
 function getDashboardWidgetCatalog(state) {
   return [
-    { key: 'hero', title: 'Pilotage', subtitle: 'Entree de tableau de bord', span: 8, hideable: false, render: function() { return renderDashboardHeroCard(state); } },
-    { key: 'priorities', title: 'Actions prioritaires', subtitle: 'Urgences et arbitrages', span: 4, hideable: true, render: function() { return renderDashboardPrioritiesCard(state); } },
-    { key: 'metrics', title: 'Chiffres clefs', subtitle: 'Synthese instantanee', span: 12, hideable: true, render: function() { return renderDashboardMetricsCard(state); } },
-    { key: 'tickets', title: 'File de traitement', subtitle: 'Tickets a lire maintenant', span: 7, hideable: true, render: function() { return renderDashboardTicketsCard(state); } },
-    { key: 'zones', title: 'Zones sous tension', subtitle: 'Focus batiment et zone', span: 5, hideable: true, render: function() { return renderDashboardZonesCard(state); } },
-    ...(isManager() ? [{ key: 'contrats', title: 'Contrats fournisseurs', subtitle: 'Echeances et budget', span: 5, hideable: true, render: function() { return renderDashboardContratsCard(state); } }] : []),
-    { key: 'activity', title: 'Activite sur 6 mois', subtitle: 'Crees vs resolus', span: 7, hideable: true, render: function() { return renderDashboardActivityCard(state); } },
-    { key: 'events', title: 'Prochains evenements', subtitle: 'Agenda residence', span: 6, hideable: true, render: function() { return renderDashboardEventsCard(); } },
-    { key: 'annonces', title: 'Annonces', subtitle: 'Messages prioritaires', span: 6, hideable: true, render: function() { return renderDashboardAnnoncesCard(); } },
-    { key: 'documents', title: 'Documents recents', subtitle: 'Acces rapide', span: 6, hideable: true, render: function() { return renderDashboardDocumentsCard(state); } },
-    { key: 'votes', title: 'Votes en cours', subtitle: 'Participation et decisions', span: 6, hideable: true, render: function() { return renderDashboardVotesCard(state); } },
-    { key: 'install', title: 'Installer l application', subtitle: 'Optimisee mobile', span: 6, hideable: true, render: function() { return renderDashboardInstallCard(); } }
+    { key: 'hero', title: 'Pilotage', subtitle: 'Entree de tableau de bord', hideable: false, defaultSize: 'hero', spans: { standard: 8, hero: 12 }, render: function() { return renderDashboardHeroCard(state); } },
+    { key: 'priorities', title: 'Actions prioritaires', subtitle: 'Urgences et arbitrages', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardPrioritiesCard(state); } },
+    { key: 'alerts', title: 'Centre d alertes', subtitle: 'Ce qui peut deraper vite', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 5, hero: 8 }, render: function() { return renderDashboardAlertsCard(state); } },
+    { key: 'metrics', title: 'Chiffres clefs', subtitle: 'Synthese instantanee', hideable: true, defaultSize: 'standard', spans: { compact: 6, standard: 12, hero: 12 }, render: function() { return renderDashboardMetricsCard(state); } },
+    { key: 'tickets', title: 'File de traitement', subtitle: 'Tickets a lire maintenant', hideable: true, defaultSize: 'hero', spans: { compact: 5, standard: 7, hero: 12 }, render: function() { return renderDashboardTicketsCard(state); } },
+    { key: 'zones', title: 'Zones sous tension', subtitle: 'Focus batiment et zone', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 5, hero: 8 }, render: function() { return renderDashboardZonesCard(state); } },
+    ...(isManager() ? [{ key: 'contrats', title: 'Contrats fournisseurs', subtitle: 'Echeances et budget', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 5, hero: 8 }, render: function() { return renderDashboardContratsCard(state); } }] : []),
+    { key: 'activity', title: 'Activite sur 6 mois', subtitle: 'Crees vs resolus', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 7, hero: 8 }, render: function() { return renderDashboardActivityCard(state); } },
+    { key: 'events', title: 'Prochains evenements', subtitle: 'Agenda residence', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 6, hero: 8 }, render: function() { return renderDashboardEventsCard(); } },
+    { key: 'annonces', title: 'Annonces', subtitle: 'Messages prioritaires', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 6, hero: 8 }, render: function() { return renderDashboardAnnoncesCard(); } },
+    { key: 'documents', title: 'Documents recents', subtitle: 'Acces rapide', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 6, hero: 8 }, render: function() { return renderDashboardDocumentsCard(state); } },
+    { key: 'votes', title: 'Votes en cours', subtitle: 'Participation et decisions', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 6, hero: 8 }, render: function() { return renderDashboardVotesCard(state); } },
+    { key: 'install', title: 'Installer l application', subtitle: 'Optimisee mobile', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 6, hero: 8 }, render: function() { return renderDashboardInstallCard(); } }
   ];
 }
 
@@ -537,24 +585,28 @@ function toggleDashboardWidgetVisibility(key) {
 }
 
 function buildDashboardCardShell(config, body, actionHTML) {
+  var isEdit = getDashboardEditMode();
+  var size = getDashboardCardSize(config);
   return ''
-    + '<article class="dash4-card" draggable="true" data-widget-key="' + config.key + '" data-span="' + config.span + '">'
+    + '<article class="dash4-card" draggable="' + (isEdit ? 'true' : 'false') + '" data-widget-key="' + config.key + '" data-span="' + getDashboardCardSpan(config) + '" data-size="' + size + '" data-editing="' + (isEdit ? 'true' : 'false') + '">'
     + '<div class="dash4-card-head">'
     + '<div><h3>' + escHtml(config.title) + '</h3><p>' + escHtml(config.subtitle) + '</p></div>'
-    + '<div class="dash4-card-tools">' + (actionHTML || '') + '<button class="dash4-handle" type="button" title="Deplacer">::</button></div>'
+    + '<div class="dash4-card-tools">' + (actionHTML || '') + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'' + config.key + '\')" title="Taille">' + size.charAt(0).toUpperCase() + '</button>' : '') + '<button class="dash4-handle" type="button" title="Deplacer">::</button></div>'
     + '</div>'
     + '<div class="dash4-card-body">' + body + '</div>'
     + '</article>';
 }
 
 function renderDashboardHeroCard(state) {
+  var isEdit = getDashboardEditMode();
+  var heroConfig = { key: 'hero', title: 'Pilotage residence', subtitle: 'Vue generale premium, orientee action et mobile.', spans: { standard: 8, hero: 12 }, defaultSize: 'hero' };
   var body = ''
     + '<div class="dash4-date">' + new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '</div>'
     + '<div class="dash4-hero-grid">'
     + '<div><div class="dash4-hero-title">Bonjour ' + escHtml(getDashboardGreeting()) + ', pilotons la residence.</div><div class="dash4-hero-sub">' + escHtml(getDashboardSummaryText(state)) + '</div><div class="dash4-action-row"><button class="btn btn-primary" onclick="openNewTicket()">Nouveau signalement</button><button class="btn btn-secondary" onclick="nav(\'tickets\')">Tous les signalements</button><button class="btn btn-ghost" onclick="toggleDashboardCustomizer()">Personnaliser</button></div></div>'
     + '<div class="dash4-highlight"><span>Focus du jour</span><strong>' + state.ouverts.length + '</strong><p>tickets actifs a suivre, dont ' + state.critiques.length + ' critiques et ' + state.resolus.length + ' deja resolus.</p></div>'
     + '</div>';
-  return '<article class="dash4-card dash4-board-hero" draggable="true" data-widget-key="hero" data-span="8"><div class="dash4-card-head"><div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-icon-btn" type="button" onclick="toggleDashboardCustomizer()" title="Personnaliser">+</button><button class="dash4-handle" type="button" title="Deplacer">::</button></div></div><div class="dash4-card-body">' + body + '</div></article>';
+  return '<article class="dash4-card dash4-board-hero" draggable="' + (isEdit ? 'true' : 'false') + '" data-widget-key="hero" data-span="' + getDashboardCardSpan(heroConfig) + '" data-size="' + getDashboardCardSize(heroConfig) + '" data-editing="' + (isEdit ? 'true' : 'false') + '"><div class="dash4-card-head"><div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-icon-btn" type="button" onclick="toggleDashboardCustomizer()" title="Personnaliser">+</button>' + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'hero\')" title="Taille">H</button>' : '') + '<button class="dash4-handle" type="button" title="Deplacer">::</button></div></div><div class="dash4-card-body">' + body + '</div></article>';
 }
 
 function renderDashboardPrioritiesCard(state) {
@@ -562,6 +614,27 @@ function renderDashboardPrioritiesCard(state) {
     return '<button class="dash4-priority" data-tone="' + card.tone + '" onclick="' + card.action + '"><span class="dash4-priority-badge">' + card.icon + '</span><span class="dash4-priority-copy"><strong>' + escHtml(card.title) + '</strong><span>' + escHtml(card.subtitle) + '</span></span><span class="dash4-priority-cta">' + escHtml(card.cta) + ' -></span></button>';
   }).join('');
   return buildDashboardCardShell({ key: 'priorities', title: 'Actions prioritaires', subtitle: 'Ce qui demande une decision ou un suivi rapide.', span: 4 }, '<div class="dash4-priority-stack">' + items + '</div>', '');
+}
+
+function renderDashboardAlertsCard(state) {
+  var oldTickets = state.ouverts.filter(function(t) { return Math.floor((Date.now() - new Date(t.created_at).getTime()) / 864e5) >= 7; });
+  var upcomingEvents = (cache.evenements || []).filter(function(e) {
+    var diff = new Date(e.date_debut) - new Date();
+    return diff > 0 && diff < (72 * 60 * 60 * 1000);
+  });
+  var newDocs = state.docs.filter(function(doc) { return typeof _docsVus !== 'undefined' ? !_docsVus.has(doc.id) : false; });
+  var alerts = [
+    { tone: 'critical', label: 'Critiques actives', value: state.critiques.length, note: 'tickets a traiter sans delai', action: "setDashFocus('critique')" },
+    { tone: 'warning', label: 'Tickets a relancer', value: oldTickets.length, note: 'ouverts depuis au moins 7 jours', action: "setDashFocus('ouvert')" },
+    { tone: 'info', label: 'Evenements a venir', value: upcomingEvents.length, note: 'dans les 72 prochaines heures', action: "nav('agenda')" },
+    { tone: 'success', label: 'Nouveaux documents', value: newDocs.length, note: 'pieces a consulter rapidement', action: "nav('documents')" }
+  ];
+  if (isManager()) alerts.splice(2, 0, { tone: 'warning', label: 'Contrats sensibles', value: state.contratsExpires.length + state.contratsAlertes.length, note: 'echeances a surveiller', action: "nav('contrats')" });
+  var body = '<div class="dash4-alert-grid">' + alerts.map(function(item) {
+    return '<button class="dash4-alert" data-tone="' + item.tone + '" onclick="' + item.action + '"><small>' + escHtml(item.label) + '</small><strong>' + item.value + '</strong><span>' + escHtml(item.note) + '</span></button>';
+  }).join('') + '</div>';
+  body += '<div class="dash4-alert-ribbon"><span>Raccourcis</span><div class="dash4-alert-actions"><button class="btn btn-ghost btn-sm" onclick="openNewTicket()">Nouveau ticket</button><button class="btn btn-ghost btn-sm" onclick="nav(\'agenda\')">Agenda</button><button class="btn btn-ghost btn-sm" onclick="nav(\'annonces\')">Annonces</button></div></div>';
+  return buildDashboardCardShell({ key: 'alerts', title: 'Centre d alertes', subtitle: 'Ce qui peut deraper vite, pour garder la residence sous controle.', span: 5 }, body, '<button class="btn btn-ghost btn-sm" type="button" onclick="toggleDashboardCustomizer()">Regler</button>');
 }
 
 function renderDashboardMetricsCard(state) {
@@ -639,9 +712,10 @@ function renderDashboardCustomizer(state) {
   var visibility = getDashboardVisibility();
   var toggles = getDashboardWidgetCatalog(state).filter(function(item) { return item.hideable; }).map(function(item) {
     var hidden = !!visibility[item.key];
-    return '<button class="dash4-toggle ' + (hidden ? 'is-hidden' : '') + '" onclick="toggleDashboardWidgetVisibility(\'' + item.key + '\')"><span class="dash4-toggle-text"><strong>' + escHtml(item.title) + '</strong><span>' + escHtml(item.subtitle) + '</span></span><span class="dash4-toggle-indicator"></span></button>';
+    var size = getDashboardCardSize(item);
+    return '<div class="dash4-toggle ' + (hidden ? 'is-hidden' : '') + '"><button class="dash4-toggle-main" onclick="toggleDashboardWidgetVisibility(\'' + item.key + '\')"><span class="dash4-toggle-text"><strong>' + escHtml(item.title) + '</strong><span>' + escHtml(item.subtitle) + '</span></span><span class="dash4-toggle-indicator"></span></button>' + (item.spans ? '<button class="dash4-size-chip" onclick="cycleDashboardWidgetSize(\'' + item.key + '\')">' + escHtml(size) + '</button>' : '') + '</div>';
   }).join('');
-  return '<section id="dash-customize-panel" class="dash4-customize"><div class="dash4-customize-head"><div><h2>Composer votre dashboard</h2><p>Masque les blocs secondaires, reorganise tout par glisser-deposer et garde le meme ordre en light et dark.</p></div><button class="btn btn-ghost btn-sm" onclick="toggleDashboardCustomizer()">Fermer</button></div><div class="dash4-toggle-grid">' + toggles + '</div></section>';
+  return '<section id="dash-customize-panel" class="dash4-customize"><div class="dash4-customize-head"><div><h2>Composer votre dashboard</h2><p>Masque les blocs secondaires, choisis leur taille et active le vrai mode edition pour reorganiser le cockpit.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn ' + (getDashboardEditMode() ? 'btn-primary' : 'btn-secondary') + ' btn-sm" onclick="toggleDashboardEditMode()">' + (getDashboardEditMode() ? 'Quitter edition' : 'Mode edition') + '</button><button class="btn btn-ghost btn-sm" onclick="toggleDashboardCustomizer()">Fermer</button></div></div><div class="dash4-toggle-grid">' + toggles + '</div></section>';
 }
 
 function renderDashboardBoard(state) {
@@ -663,6 +737,7 @@ function initDashboardWidgetRail() {
   if (!board || board.__dashReady) return;
   board.__dashReady = true;
   board.addEventListener('dragstart', function(e) {
+    if (!getDashboardEditMode()) return;
     var card = e.target.closest('.dash4-card');
     if (!card) return;
     _dashWidgetDragKey = card.getAttribute('data-widget-key');
@@ -673,12 +748,13 @@ function initDashboardWidgetRail() {
     }
   });
   board.addEventListener('dragend', function() {
+    if (!getDashboardEditMode()) return;
     _dashWidgetDragKey = null;
     board.querySelectorAll('.dash4-card').forEach(function(node) { node.classList.remove('is-dragging'); node.removeAttribute('data-drag-over'); });
     saveDashboardWidgetOrderFromDOM();
   });
   board.addEventListener('dragover', function(e) {
-    if (!_dashWidgetDragKey) return;
+    if (!getDashboardEditMode() || !_dashWidgetDragKey) return;
     var over = e.target.closest('.dash4-card');
     var dragging = board.querySelector('.dash4-card.is-dragging');
     if (!over || !dragging || over === dragging) return;
@@ -690,6 +766,7 @@ function initDashboardWidgetRail() {
     board.insertBefore(dragging, after ? over.nextSibling : over);
   });
   board.addEventListener('drop', function(e) {
+    if (!getDashboardEditMode()) return;
     e.preventDefault();
     board.querySelectorAll('.dash4-card').forEach(function(node) { node.removeAttribute('data-drag-over'); });
     saveDashboardWidgetOrderFromDOM();
@@ -737,7 +814,8 @@ renderDashboard = async function() {
   _dashFocusMode = 'tout';
   _dashFocusZone = null;
   var state = getDashboardState();
-  el.innerHTML = '<div class="dash4"><div class="dash4-shell"><section class="dash4-toolbar"><div class="dash4-toolbar-copy"><strong>Workspace dashboard</strong><span>Reorganisable, masquable et coherent en light comme en dark.</span></div><div class="dash4-toolbar-actions"><button class="btn btn-secondary" onclick="toggleDashboardCustomizer()">Personnaliser</button><button class="btn btn-ghost" onclick="nav(\'faq\')">Aide</button></div></section>' + renderDashboardCustomizer(state) + '<section id="dash-board" class="dash4-board">' + renderDashboardBoard(state) + '</section></div></div>';
+  var editMode = getDashboardEditMode();
+  el.innerHTML = '<div class="dash4" data-editing="' + (editMode ? 'true' : 'false') + '"><div class="dash4-shell"><section class="dash4-toolbar"><div class="dash4-toolbar-copy"><strong>Workspace dashboard</strong><span>' + (editMode ? 'Mode edition actif: glisse, redimensionne et masque les widgets a ta guise.' : 'Reorganisable, masquable et coherent en light comme en dark.') + '</span></div><div class="dash4-toolbar-actions"><button class="btn ' + (editMode ? 'btn-primary' : 'btn-secondary') + '" onclick="toggleDashboardEditMode()">' + (editMode ? 'Edition active' : 'Mode edition') + '</button><button class="btn btn-secondary" onclick="toggleDashboardCustomizer()">Personnaliser</button><button class="btn btn-ghost" onclick="nav(\'faq\')">Aide</button></div></section>' + renderDashboardCustomizer(state) + '<section id="dash-board" class="dash4-board">' + renderDashboardBoard(state) + '</section></div></div>';
   initDashboardWidgetRail();
   initDashboardResizeBinding();
   loadDashboardWidgets();
