@@ -288,6 +288,11 @@ body {
 
 /* ── PAGE ── */
 #page { flex: 1; padding: 24px; max-width: 1280px; width: 100%; position: relative; }
+#page.page-dashboard-exec {
+  max-width: none;
+  width: 100%;
+  padding: 18px 20px 28px;
+}
 
 /* ── PAGE HEADER ── */
 .ph { margin-bottom: 22px; }
@@ -1288,7 +1293,9 @@ body {
 }
 .dash4-shell {
   display: grid;
-  gap: 12px;
+  gap: 14px;
+  width: 100%;
+  max-width: 1720px;
 }
 .dash4-toolbar {
   display: flex;
@@ -1296,7 +1303,13 @@ body {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 4px 2px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(210,200,186,.72);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.62), transparent 42%),
+    rgba(252,248,242,.82);
+  box-shadow: 0 12px 30px rgba(24,18,10,.05);
 }
 .dash4-toolbar::after {
   content: '';
@@ -1308,7 +1321,7 @@ body {
 .dash4-toolbar-copy strong {
   display: block;
   font-family: var(--font-head);
-  font-size: 18px;
+  font-size: 22px;
   letter-spacing: -.03em;
 }
 .dash4-toolbar-copy span {
@@ -1359,14 +1372,14 @@ body {
   z-index: 25;
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 14px;
+  gap: 12px;
   align-items: center;
-  padding: 14px 16px;
-  border: 1px solid var(--dash4-border-strong);
+  padding: 12px 14px;
+  border: 1px solid rgba(199,189,176,.76);
   border-radius: 22px;
   background:
-    linear-gradient(135deg, rgba(36,89,212,.10), transparent 50%),
-    linear-gradient(180deg, rgba(255,255,255,.52), transparent 40%),
+    linear-gradient(135deg, rgba(36,89,212,.08), transparent 48%),
+    linear-gradient(180deg, rgba(255,255,255,.48), transparent 40%),
     var(--dash4-surface-strong);
   box-shadow: var(--dash4-shadow-soft);
 }
@@ -1382,12 +1395,12 @@ body {
 }
 .dash4-edit-copy strong {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
 }
 .dash4-edit-copy span {
   display: block;
   margin-top: 3px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--dash4-text-soft);
 }
 .dash4-edit-actions {
@@ -1404,16 +1417,37 @@ body {
 }
 .dash4-customize {
   display: none;
-  padding: 16px 18px 18px;
-  border: 1px solid var(--dash4-border);
+  position: fixed;
+  top: 88px;
+  right: 20px;
+  width: min(392px, calc(100vw - 40px));
+  max-height: calc(100dvh - 108px);
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid rgba(201,191,176,.86);
   border-radius: 24px;
   background:
-    radial-gradient(360px 130px at 0% 0%, rgba(37,99,235,.07), transparent 68%),
+    radial-gradient(360px 130px at 0% 0%, rgba(37,99,235,.09), transparent 68%),
+    linear-gradient(180deg, rgba(255,255,255,.56), transparent 20%),
     var(--dash4-surface);
-  box-shadow: var(--dash4-shadow-soft);
+  box-shadow: 0 30px 80px rgba(15,12,9,.16);
+  z-index: 80;
 }
 .dash4-customize.is-open {
   display: block;
+}
+.dash4-customize-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(37,99,235,.09);
+  color: var(--dash4-accent);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
 }
 .dash4-customize-head {
   display: flex;
@@ -1424,17 +1458,19 @@ body {
 }
 .dash4-customize-head h2 {
   font-family: var(--font-head);
-  font-size: 20px;
+  margin-top: 10px;
+  font-size: 28px;
   letter-spacing: -.03em;
 }
 .dash4-customize-head p {
-  margin-top: 4px;
+  margin-top: 6px;
+  max-width: 28ch;
   font-size: 12px;
   color: var(--text-3);
 }
 .dash4-toggle-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 .dash4-toggle {
@@ -1519,14 +1555,14 @@ body {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-auto-flow: dense;
-  gap: 12px;
+  gap: 14px;
   align-items: start;
 }
 .dash4-card {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--dash4-border);
-  border-radius: 24px;
+  border-radius: 22px;
   background:
     linear-gradient(180deg, rgba(255,255,255,.56), transparent 24%),
     var(--dash4-surface);
@@ -1563,52 +1599,54 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 14px 0;
+  padding: 14px 16px 0;
 }
 .dash4-card-head h2,
 .dash4-card-head h3 {
   font-family: var(--font-head);
-  font-size: 17px;
+  font-size: 19px;
   line-height: 1.02;
   letter-spacing: -.04em;
 }
 .dash4-card-head p {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--dash4-text-soft);
 }
 .dash4-card-body {
-  padding: 12px 14px 14px;
+  padding: 12px 16px 16px;
 }
 .dash4-card-tools {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 .dash4-head-link {
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 36px;
+  padding: 0 14px;
   border: 1px solid rgba(204,194,180,.7);
   border-radius: 999px;
   background: rgba(255,251,245,.8);
   color: var(--text-2);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 .dash4-card-edit-tools {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 .dash4-control-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 34px;
+  gap: 6px;
+  min-height: 32px;
   padding: 0 10px;
   border: 1px solid rgba(204,194,180,.72);
   border-radius: 999px;
@@ -1617,13 +1655,13 @@ body {
   cursor: pointer;
 }
 .dash4-control-btn span {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: .12em;
   text-transform: uppercase;
 }
 .dash4-control-btn strong {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 900;
   color: var(--text);
 }
@@ -1687,15 +1725,16 @@ body {
 }
 .dash4-hero-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 12px;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  gap: 16px;
+  align-items: center;
 }
 .dash4-hero-title {
   margin-top: 10px;
   font-family: var(--font-head);
-  font-size: clamp(34px, 4.8vw, 58px);
-  line-height: .92;
+  max-width: 11ch;
+  font-size: clamp(30px, 3.6vw, 56px);
+  line-height: .9;
   letter-spacing: -.07em;
 }
 .dash4-hero-sub {
@@ -2468,14 +2507,35 @@ body {
   color: #a69a8a;
 }
 @media (max-width: 1440px) {
+  #page.page-dashboard-exec { padding: 18px 18px 26px; }
   .dash4-hero-grid { grid-template-columns: 1fr 200px; }
   .dash4-hero-title { font-size: clamp(30px, 4.2vw, 48px); }
+  .dash4-customize {
+    top: 82px;
+    right: 18px;
+    width: min(360px, calc(100vw - 36px));
+  }
   .dash4-card[data-span="7"] { grid-column: span 12; }
   .dash4-card[data-span="5"] { grid-column: span 6; }
   .dash4-card[data-span="4"] { grid-column: span 6; }
 }
 @media (max-width: 1180px) {
+  #page.page-dashboard-exec { padding: 16px 16px 24px; }
   .dash4-toggle-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash4-toolbar,
+  .dash4-edit-dock {
+    grid-template-columns: 1fr;
+  }
+  .dash4-edit-actions {
+    justify-content: flex-start;
+  }
+  .dash4-customize {
+    top: 74px;
+    right: 16px;
+    left: 16px;
+    width: auto;
+    max-height: calc(100dvh - 96px);
+  }
   .dash4-card[data-span="8"],
   .dash4-card[data-span="7"],
   .dash4-card[data-span="6"],
@@ -2487,12 +2547,26 @@ body {
   .dash4-hero-title { font-size: clamp(28px, 5vw, 42px); }
 }
 @media (max-width: 760px) {
+  #page.page-dashboard-exec { padding: 12px 12px 90px; }
   .dash4-toolbar-actions {
     width: 100%;
     justify-content: space-between;
   }
   .dash4-toolbar-btn {
     flex: 1 1 0;
+  }
+  .dash4-customize {
+    position: static;
+    width: 100%;
+    max-height: none;
+    margin-top: 2px;
+    box-shadow: var(--dash4-shadow-soft);
+  }
+  .dash4-customize-head {
+    flex-direction: column;
+  }
+  .dash4-customize-head h2 {
+    font-size: 24px;
   }
   .dash4-board { grid-template-columns: 1fr; }
   .dash4-card[data-span] { grid-column: span 1 !important; }
