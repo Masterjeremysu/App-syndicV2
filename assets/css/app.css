@@ -1298,6 +1298,13 @@ body {
   flex-wrap: wrap;
   padding: 4px 2px 0;
 }
+.dash4-toolbar::after {
+  content: '';
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(214,205,192,.9), rgba(214,205,192,.18));
+  order: 3;
+}
 .dash4-toolbar-copy strong {
   display: block;
   font-family: var(--font-head);
@@ -1314,6 +1321,37 @@ body {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+  padding: 6px;
+  border: 1px solid rgba(204,194,180,.72);
+  border-radius: 999px;
+  background: rgba(255,251,245,.82);
+  box-shadow: 0 10px 24px rgba(24,18,10,.05);
+}
+.dash4-toolbar-btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease, border-color .18s ease, transform .18s ease;
+}
+.dash4-toolbar-btn:hover {
+  transform: translateY(-1px);
+  color: var(--text);
+}
+.dash4-toolbar-btn.is-active {
+  background: #171513;
+  color: #fffaf3;
+  border-color: #171513;
+  box-shadow: 0 10px 18px rgba(20,16,10,.16);
+}
+.dash4-toolbar-btn.is-ghost {
+  color: var(--text-3);
 }
 .dash4-edit-dock {
   position: sticky;
@@ -1357,6 +1395,12 @@ body {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+.dash4-customize-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 .dash4-customize {
   display: none;
@@ -1540,6 +1584,51 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.dash4-head-link {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(204,194,180,.7);
+  border-radius: 999px;
+  background: rgba(255,251,245,.8);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.dash4-card-edit-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.dash4-control-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(204,194,180,.72);
+  border-radius: 999px;
+  background: rgba(255,251,245,.82);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.dash4-control-btn span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.dash4-control-btn strong {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--text);
+}
+.dash4-control-btn.is-size {
+  background: rgba(246,241,233,.92);
 }
 .dash4-icon-btn {
   width: 34px;
@@ -2144,6 +2233,18 @@ body {
 [data-theme="dark"] .dash4-highlight {
   background: rgba(18,17,16,.65);
 }
+[data-theme="dark"] .dash4-toolbar-actions,
+[data-theme="dark"] .dash4-head-link,
+[data-theme="dark"] .dash4-control-btn {
+  background: rgba(28,24,21,.92);
+  border-color: rgba(126,106,84,.28);
+  color: #d8d1c5;
+}
+[data-theme="dark"] .dash4-toolbar-btn.is-active {
+  background: #f5f2eb;
+  color: #141210;
+  border-color: #f5f2eb;
+}
 
 /* ── Tickets page v4 ── */
 .tickets4 {
@@ -2386,6 +2487,13 @@ body {
   .dash4-hero-title { font-size: clamp(28px, 5vw, 42px); }
 }
 @media (max-width: 760px) {
+  .dash4-toolbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .dash4-toolbar-btn {
+    flex: 1 1 0;
+  }
   .dash4-board { grid-template-columns: 1fr; }
   .dash4-card[data-span] { grid-column: span 1 !important; }
   .dash4-kpi-grid,
@@ -2421,6 +2529,11 @@ body {
     flex-direction: column;
   }
   .dash4-toggle-actions {
+    justify-content: flex-start;
+  }
+  .dash4-card-tools,
+  .dash4-card-edit-tools,
+  .dash4-customize-actions {
     justify-content: flex-start;
   }
   .tickets4-hero,
