@@ -110,11 +110,11 @@ function saveDashboardWidgetOrder(order) {
   try { localStorage.setItem(DASH_WIDGET_ORDER_KEY, JSON.stringify(order)); } catch (e) {}
 }
 
-function saveDashboardWidgetOrderFromDOM() {
+saveDashboardWidgetOrderFromDOM = function() {
   var rail = $('dash-widget-rail');
   if (!rail) return;
   saveDashboardWidgetOrder(Array.from(rail.querySelectorAll('[data-widget-key]')).map(function(node) { return node.getAttribute('data-widget-key'); }));
-}
+};
 
 function buildDashboardWidgetFrame(key, title, subtitle, body, actionHTML) {
   return ''
@@ -295,7 +295,7 @@ function moveDashboardWidget(key, delta) {
   saveDashboardWidgetOrderFromDOM();
 }
 
-function initDashboardWidgetRail() {
+initDashboardWidgetRail = function() {
   var rail = $('dash-widget-rail');
   if (!rail || rail.__dashReady) return;
   rail.__dashReady = true;
@@ -331,7 +331,7 @@ function initDashboardWidgetRail() {
     rail.querySelectorAll('.dash3-widget').forEach(function(node) { node.removeAttribute('data-drag-over'); });
     saveDashboardWidgetOrderFromDOM();
   });
-}
+};
 
 function initDashboardResizeBinding() {
   if (_dashResizeBound) return;
@@ -477,3 +477,298 @@ function renderDashChart() {
     canvas.addEventListener('mouseleave', canvas.__dashLeaveHandler);
   }
 }
+
+const DASH_WIDGET_VISIBILITY_KEY = 'coprosync_dash_widget_visibility_v4';
+
+function getDashboardWidgetCatalog(state) {
+  return [
+    { key: 'hero', title: 'Pilotage', subtitle: 'Entree de tableau de bord', span: 8, hideable: false, render: function() { return renderDashboardHeroCard(state); } },
+    { key: 'priorities', title: 'Actions prioritaires', subtitle: 'Urgences et arbitrages', span: 4, hideable: true, render: function() { return renderDashboardPrioritiesCard(state); } },
+    { key: 'metrics', title: 'Chiffres clefs', subtitle: 'Synthese instantanee', span: 12, hideable: true, render: function() { return renderDashboardMetricsCard(state); } },
+    { key: 'tickets', title: 'File de traitement', subtitle: 'Tickets a lire maintenant', span: 7, hideable: true, render: function() { return renderDashboardTicketsCard(state); } },
+    { key: 'zones', title: 'Zones sous tension', subtitle: 'Focus batiment et zone', span: 5, hideable: true, render: function() { return renderDashboardZonesCard(state); } },
+    ...(isManager() ? [{ key: 'contrats', title: 'Contrats fournisseurs', subtitle: 'Echeances et budget', span: 5, hideable: true, render: function() { return renderDashboardContratsCard(state); } }] : []),
+    { key: 'activity', title: 'Activite sur 6 mois', subtitle: 'Crees vs resolus', span: 7, hideable: true, render: function() { return renderDashboardActivityCard(state); } },
+    { key: 'events', title: 'Prochains evenements', subtitle: 'Agenda residence', span: 6, hideable: true, render: function() { return renderDashboardEventsCard(); } },
+    { key: 'annonces', title: 'Annonces', subtitle: 'Messages prioritaires', span: 6, hideable: true, render: function() { return renderDashboardAnnoncesCard(); } },
+    { key: 'documents', title: 'Documents recents', subtitle: 'Acces rapide', span: 6, hideable: true, render: function() { return renderDashboardDocumentsCard(state); } },
+    { key: 'votes', title: 'Votes en cours', subtitle: 'Participation et decisions', span: 6, hideable: true, render: function() { return renderDashboardVotesCard(state); } },
+    { key: 'install', title: 'Installer l application', subtitle: 'Optimisee mobile', span: 6, hideable: true, render: function() { return renderDashboardInstallCard(); } }
+  ];
+}
+
+function getDashboardVisibility() {
+  try {
+    return JSON.parse(localStorage.getItem(DASH_WIDGET_VISIBILITY_KEY) || '{}') || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function setDashboardVisibility(visibility) {
+  try { localStorage.setItem(DASH_WIDGET_VISIBILITY_KEY, JSON.stringify(visibility)); } catch (e) {}
+}
+
+function getDashboardBoardOrder(state) {
+  var defaults = getDashboardWidgetCatalog(state).map(function(item) { return item.key; });
+  try {
+    var raw = localStorage.getItem(DASH_WIDGET_ORDER_KEY);
+    if (!raw) return defaults;
+    var parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return defaults;
+    var filtered = parsed.filter(function(key) { return defaults.includes(key); });
+    defaults.forEach(function(key) { if (!filtered.includes(key)) filtered.push(key); });
+    return filtered;
+  } catch (e) {
+    return defaults;
+  }
+}
+
+function toggleDashboardCustomizer() {
+  var panel = $('dash-customize-panel');
+  if (panel) panel.classList.toggle('is-open');
+}
+
+function toggleDashboardWidgetVisibility(key) {
+  var visibility = getDashboardVisibility();
+  visibility[key] = !visibility[key];
+  setDashboardVisibility(visibility);
+  renderDashboard();
+}
+
+function buildDashboardCardShell(config, body, actionHTML) {
+  return ''
+    + '<article class="dash4-card" draggable="true" data-widget-key="' + config.key + '" data-span="' + config.span + '">'
+    + '<div class="dash4-card-head">'
+    + '<div><h3>' + escHtml(config.title) + '</h3><p>' + escHtml(config.subtitle) + '</p></div>'
+    + '<div class="dash4-card-tools">' + (actionHTML || '') + '<button class="dash4-handle" type="button" title="Deplacer">::</button></div>'
+    + '</div>'
+    + '<div class="dash4-card-body">' + body + '</div>'
+    + '</article>';
+}
+
+function renderDashboardHeroCard(state) {
+  var body = ''
+    + '<div class="dash4-date">' + new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '</div>'
+    + '<div class="dash4-hero-grid">'
+    + '<div><div class="dash4-hero-title">Bonjour ' + escHtml(getDashboardGreeting()) + ', pilotons la residence.</div><div class="dash4-hero-sub">' + escHtml(getDashboardSummaryText(state)) + '</div><div class="dash4-action-row"><button class="btn btn-primary" onclick="openNewTicket()">Nouveau signalement</button><button class="btn btn-secondary" onclick="nav(\'tickets\')">Tous les signalements</button><button class="btn btn-ghost" onclick="toggleDashboardCustomizer()">Personnaliser</button></div></div>'
+    + '<div class="dash4-highlight"><span>Focus du jour</span><strong>' + state.ouverts.length + '</strong><p>tickets actifs a suivre, dont ' + state.critiques.length + ' critiques et ' + state.resolus.length + ' deja resolus.</p></div>'
+    + '</div>';
+  return '<article class="dash4-card dash4-board-hero" draggable="true" data-widget-key="hero" data-span="8"><div class="dash4-card-head"><div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-icon-btn" type="button" onclick="toggleDashboardCustomizer()" title="Personnaliser">+</button><button class="dash4-handle" type="button" title="Deplacer">::</button></div></div><div class="dash4-card-body">' + body + '</div></article>';
+}
+
+function renderDashboardPrioritiesCard(state) {
+  var items = getDashboardPriorityCards(state).map(function(card) {
+    return '<button class="dash4-priority" data-tone="' + card.tone + '" onclick="' + card.action + '"><span class="dash4-priority-badge">' + card.icon + '</span><span class="dash4-priority-copy"><strong>' + escHtml(card.title) + '</strong><span>' + escHtml(card.subtitle) + '</span></span><span class="dash4-priority-cta">' + escHtml(card.cta) + ' -></span></button>';
+  }).join('');
+  return buildDashboardCardShell({ key: 'priorities', title: 'Actions prioritaires', subtitle: 'Ce qui demande une decision ou un suivi rapide.', span: 4 }, '<div class="dash4-priority-stack">' + items + '</div>', '');
+}
+
+function renderDashboardMetricsCard(state) {
+  var openOrMine = isManager() ? state.syndic.length : state.mine.length;
+  var body = ''
+    + '<div class="dash4-kpi-grid">'
+    + '<button class="dash4-kpi" data-tone="warning" onclick="setDashFocus(\'ouvert\')"><small>Ouverts</small><strong>' + state.ouverts.length + '</strong><span>Signalements en cours</span></button>'
+    + '<button class="dash4-kpi" data-tone="critical" onclick="setDashFocus(\'critique\')"><small>Critiques</small><strong>' + state.critiques.length + '</strong><span>Traitement immediat</span></button>'
+    + '<button class="dash4-kpi" data-tone="info" onclick="' + (isManager() ? "setDashFocus('transmis')" : "setDashFocus('mine')") + '"><small>' + (isManager() ? 'Transmis' : 'Mes tickets') + '</small><strong>' + openOrMine + '</strong><span>' + (isManager() ? 'En attente syndic' : 'Crees par vous') + '</span></button>'
+    + '<button class="dash4-kpi" data-tone="success" onclick="setDashFocus(\'resolu\')"><small>Resolus</small><strong>' + state.resolus.length + '</strong><span>Historique traite</span></button>'
+    + '</div>';
+  return buildDashboardCardShell({ key: 'metrics', title: 'Vue rapide', subtitle: getDashboardFocusLabel(), span: 12 }, body, '');
+}
+
+function renderDashboardTicketsCard(state) {
+  var body = '<div class="dash4-filterbar"><div class="dash4-filterbar-copy"><strong>Lecture rapide</strong><span id="dash-focus-summary">' + escHtml(getDashboardFocusLabel()) + '</span></div><div class="dash4-filter-row"><button class="dash4-pill is-active" data-dash-focus="tout" onclick="setDashFocus(\'tout\')">Tout</button><button class="dash4-pill" data-dash-focus="ouvert" onclick="setDashFocus(\'ouvert\')">Ouverts</button><button class="dash4-pill" data-dash-focus="critique" onclick="setDashFocus(\'critique\')">Critiques</button><button class="dash4-pill" data-dash-focus="' + (isManager() ? 'transmis' : 'mine') + '" onclick="' + (isManager() ? "setDashFocus('transmis')" : "setDashFocus('mine')") + '">' + (isManager() ? 'Transmis' : 'Mes tickets') + '</button><button class="dash4-pill" data-dash-focus="resolu" onclick="setDashFocus(\'resolu\')">Resolus</button><button class="dash4-pill" id="dash-zone-reset" style="display:none;" onclick="clearDashFocus()">Quitter la zone</button></div></div>';
+  body += '<div id="dash-recent-list" class="dash4-ticket-stack" style="margin-top:14px;">' + renderDashRecentListHTML(getDashTicketsForRecent()) + '</div>';
+  return buildDashboardCardShell({ key: 'tickets', title: 'File de traitement', subtitle: 'Les tickets les plus utiles a voir tout de suite selon le filtre courant.', span: 7 }, body, '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'tickets\')">Ouvrir</button>');
+}
+
+function renderDashboardZonesCard() {
+  return buildDashboardCardShell({ key: 'zones', title: 'Zones sous tension', subtitle: 'Clique une zone pour concentrer la vue. Tres utile sur mobile pour rester rapide.', span: 5 }, '<div id="dash-zone-list" class="dash4-zones">' + renderDashZonesListHTML(getDashTicketsForZones()) + '</div>', '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'map\')">Carte</button>');
+}
+
+function renderDashboardContratsCard(state) {
+  var conformes = state.contrats.filter(function(c) { return daysUntil(c.date_echeance) > (c.alerte_jours ?? 90); });
+  var budget = state.contrats.reduce(function(sum, c) { return sum + (c.montant_annuel || 0); }, 0);
+  var urgents = state.contrats.filter(function(c) { return daysUntil(c.date_echeance) <= (c.alerte_jours ?? 90); }).sort(function(a, b) { return new Date(a.date_echeance) - new Date(b.date_echeance); }).slice(0, 4);
+  var body = '<div class="dash4-contract-grid"><div class="dash4-contract-box"><strong>' + state.contratsExpires.length + '</strong><span>Expires</span></div><div class="dash4-contract-box"><strong>' + state.contratsAlertes.length + '</strong><span>En alerte</span></div><div class="dash4-contract-box" data-tone="ok"><strong>' + conformes.length + '</strong><span>Conformes</span></div></div>';
+  body += urgents.length ? '<div class="dash4-list-stack">' + urgents.map(function(c) {
+    var delta = daysUntil(c.date_echeance);
+    var tone = delta < 0 ? 'var(--dash4-danger)' : (delta <= 30 ? 'var(--dash4-warning)' : 'var(--dash4-accent)');
+    var label = delta < 0 ? 'Expire depuis ' + Math.abs(delta) + ' j' : 'Echeance dans ' + delta + ' j';
+    return '<div class="dash4-list-item" onclick="nav(\'contrats\')"><span class="dash4-list-mark" style="background:' + tone + ';"></span><span class="dash4-list-copy"><strong>' + escHtml(c.fournisseur || 'Contrat') + '</strong><span>' + escHtml((c.type_contrat || 'Contrat') + (c.contact_nom ? ' · ' + c.contact_nom : '')) + '</span></span><span class="dash4-list-meta">' + escHtml(label) + '</span></div>';
+  }).join('') + '</div>' : '<div class="dash4-empty">Aucun contrat a surveiller de pres pour le moment.</div>';
+  body += '<div class="dash4-budget-row"><span>Budget annuel actif</span><strong>' + budget.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) + ' EUR</strong></div>';
+  return buildDashboardCardShell({ key: 'contrats', title: 'Contrats fournisseurs', subtitle: 'Vue priorisee sur les echeances et le budget.', span: 5 }, body, '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'contrats\')">Ouvrir</button>');
+}
+
+function renderDashboardActivityCard() {
+  return buildDashboardCardShell({ key: 'activity', title: 'Activite sur 6 mois', subtitle: 'Crees versus resolus, avec le filtre courant applique.', span: 7 }, '<div class="dash3-chart-wrap"><canvas id="dash-chart" class="dash3-chart" height="130"></canvas><div id="dash-chart-tip" class="dash3-chart-tip" style="display:none;"></div></div>', '');
+}
+
+function renderDashboardEventsCard() {
+  return buildDashboardCardShell({ key: 'events', title: 'Prochains evenements', subtitle: 'Agenda a venir avec les rendez-vous a ne pas manquer.', span: 6 }, '<div id="dash-events-list" class="dash4-empty">Chargement des evenements...</div>', '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'agenda\')">Agenda</button>');
+}
+
+function renderDashboardAnnoncesCard() {
+  return buildDashboardCardShell({ key: 'annonces', title: 'Annonces', subtitle: 'Messages prioritaires et informations utiles pour la residence.', span: 6 }, '<div id="dash-annonces-list" class="dash4-empty">Chargement des annonces...</div>', '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'annonces\')">Toutes</button>');
+}
+
+function renderDashboardDocumentsCard(state) {
+  var body = !state.docs.length ? '<div class="dash4-empty">Aucun document recent a afficher.</div>' : '<div class="dash4-list-stack">' + state.docs.slice(0, 4).map(function(doc) {
+    var isNew = typeof _docsVus !== 'undefined' ? !_docsVus.has(doc.id) : false;
+    return '<div class="dash4-list-item" onclick="nav(\'documents\')"><span class="dash4-list-mark" style="background:' + (isNew ? 'var(--dash4-accent)' : 'var(--dash4-info)') + ';"></span><span class="dash4-list-copy"><strong>' + escHtml(doc.titre) + '</strong><span>' + escHtml(fmtD(doc.created_at)) + '</span></span><span class="dash4-list-meta">' + (isNew ? 'Nouveau' : 'Archive') + '</span></div>';
+  }).join('') + '</div>';
+  return buildDashboardCardShell({ key: 'documents', title: 'Documents recents', subtitle: 'Pieces utiles a retrouver vite depuis le tableau de bord.', span: 6 }, body, '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'documents\')">Ouvrir</button>');
+}
+
+function renderDashboardVotesCard(state) {
+  var body = !state.votesOuverts.length ? '<div class="dash4-empty">Aucun vote ouvert actuellement.</div>' : '<div class="dash4-list-stack">' + state.votesOuverts.slice(0, 3).map(function(v) {
+    var total = (typeof _allReponsesCache !== 'undefined' && _allReponsesCache[v.id]) ? _allReponsesCache[v.id].length : 0;
+    var voted = typeof _reponsesCache !== 'undefined' && _reponsesCache[v.id];
+    return '<div class="dash4-list-item" onclick="nav(\'votes\')"><span class="dash4-list-mark" style="background:' + (voted ? 'var(--dash4-success)' : 'var(--dash4-warning)') + ';"></span><span class="dash4-list-copy"><strong>' + escHtml(v.titre) + '</strong><span>' + total + ' participant' + (total > 1 ? 's' : '') + '</span></span><span class="dash4-list-meta">' + (voted ? 'Vote' : 'A faire') + '</span></div>';
+  }).join('') + '</div>';
+  return buildDashboardCardShell({ key: 'votes', title: 'Votes en cours', subtitle: 'Participation et decisions a suivre.', span: 6 }, body, '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'votes\')">Ouvrir</button>');
+}
+
+function renderDashboardInstallCard() {
+  var body = '<div class="dash4-empty" style="text-align:left;"><strong style="display:block;color:var(--text);margin-bottom:8px;">Version mobile</strong>Installe l application pour un acces plein ecran, plus stable sur iPhone et Android.<div class="dash3-widget-note">iPhone: Safari -> Partager -> Sur l ecran d accueil. Android: Chrome -> menu -> Installer l application.</div></div>';
+  return buildDashboardCardShell({ key: 'install', title: 'Installer l application', subtitle: 'Pour un usage quotidien plus fluide sur mobile.', span: 6 }, body, '');
+}
+
+function renderDashboardCustomizer(state) {
+  var visibility = getDashboardVisibility();
+  var toggles = getDashboardWidgetCatalog(state).filter(function(item) { return item.hideable; }).map(function(item) {
+    var hidden = !!visibility[item.key];
+    return '<button class="dash4-toggle ' + (hidden ? 'is-hidden' : '') + '" onclick="toggleDashboardWidgetVisibility(\'' + item.key + '\')"><span class="dash4-toggle-text"><strong>' + escHtml(item.title) + '</strong><span>' + escHtml(item.subtitle) + '</span></span><span class="dash4-toggle-indicator"></span></button>';
+  }).join('');
+  return '<section id="dash-customize-panel" class="dash4-customize"><div class="dash4-customize-head"><div><h2>Composer votre dashboard</h2><p>Masque les blocs secondaires, reorganise tout par glisser-deposer et garde le meme ordre en light et dark.</p></div><button class="btn btn-ghost btn-sm" onclick="toggleDashboardCustomizer()">Fermer</button></div><div class="dash4-toggle-grid">' + toggles + '</div></section>';
+}
+
+function renderDashboardBoard(state) {
+  var catalog = getDashboardWidgetCatalog(state);
+  var byKey = {};
+  catalog.forEach(function(item) { byKey[item.key] = item; });
+  var visibility = getDashboardVisibility();
+  return getDashboardBoardOrder(state).filter(function(key) { return byKey[key] && !(byKey[key].hideable && visibility[key]); }).map(function(key) { return byKey[key].render(); }).join('');
+}
+
+function saveDashboardWidgetOrderFromDOM() {
+  var board = $('dash-board');
+  if (!board) return;
+  saveDashboardWidgetOrder(Array.from(board.querySelectorAll('[data-widget-key]')).map(function(node) { return node.getAttribute('data-widget-key'); }));
+}
+
+function initDashboardWidgetRail() {
+  var board = $('dash-board');
+  if (!board || board.__dashReady) return;
+  board.__dashReady = true;
+  board.addEventListener('dragstart', function(e) {
+    var card = e.target.closest('.dash4-card');
+    if (!card) return;
+    _dashWidgetDragKey = card.getAttribute('data-widget-key');
+    card.classList.add('is-dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', _dashWidgetDragKey); } catch (err) {}
+    }
+  });
+  board.addEventListener('dragend', function() {
+    _dashWidgetDragKey = null;
+    board.querySelectorAll('.dash4-card').forEach(function(node) { node.classList.remove('is-dragging'); node.removeAttribute('data-drag-over'); });
+    saveDashboardWidgetOrderFromDOM();
+  });
+  board.addEventListener('dragover', function(e) {
+    if (!_dashWidgetDragKey) return;
+    var over = e.target.closest('.dash4-card');
+    var dragging = board.querySelector('.dash4-card.is-dragging');
+    if (!over || !dragging || over === dragging) return;
+    e.preventDefault();
+    board.querySelectorAll('.dash4-card').forEach(function(node) { node.removeAttribute('data-drag-over'); });
+    over.setAttribute('data-drag-over', 'true');
+    var rect = over.getBoundingClientRect();
+    var after = e.clientY > rect.top + rect.height / 2;
+    board.insertBefore(dragging, after ? over.nextSibling : over);
+  });
+  board.addEventListener('drop', function(e) {
+    e.preventDefault();
+    board.querySelectorAll('.dash4-card').forEach(function(node) { node.removeAttribute('data-drag-over'); });
+    saveDashboardWidgetOrderFromDOM();
+  });
+}
+
+renderDashRecentListHTML = function(list) {
+  if (!list.length) return '<div class="dash4-empty">Aucun ticket pour ce filtre. Le tableau de bord reste clair et disponible.</div>';
+  return list.slice(0, 6).map(function(tk) {
+    return '<button class="dash4-ticket" data-urgency="' + escHtml(tk.urgence || 'normal') + '" onclick="openDetail(\'' + tk.id + '\')"><span class="dash4-ticket-dot"></span><span class="dash4-ticket-main"><strong>' + escHtml(tk.titre) + '</strong><span>' + escHtml(tk.batiment || 'Residence') + (tk.zone ? ' · ' + escHtml(tk.zone) : '') + ' · ' + escHtml(depuisJours(tk.created_at)) + '</span></span><span class="dash4-ticket-side">' + badgeStatut(tk.statut) + '<span class="dash3-inline-hint">' + escHtml(tk.urgence || 'normal') + '</span></span></button>';
+  }).join('');
+};
+
+renderDashZonesListHTML = function(tickets) {
+  var counts = {};
+  tickets.forEach(function(t) { if (t.batiment) counts[t.batiment] = (counts[t.batiment] || 0) + 1; });
+  var zones = getDashboardZoneNames().map(function(zone) { return { name: zone, count: counts[zone] || 0 }; }).filter(function(zone) { return zone.count > 0 || _dashFocusZone === zone.name; });
+  if (!zones.length) return '<div class="dash4-empty">Aucune zone a surveiller pour ce filtre.</div>';
+  return zones.map(function(zone) {
+    var tone = zone.count >= 3 ? 'var(--dash4-danger)' : (zone.count >= 2 ? 'var(--dash4-warning)' : 'var(--dash4-accent)');
+    var width = Math.max(18, Math.min(100, zone.count * 23));
+    return '<button class="dash4-zone ' + (_dashFocusMode === 'zone' && _dashFocusZone === zone.name ? 'is-selected' : '') + '" onclick="setDashZoneFocus(' + JSON.stringify(zone.name) + ')"><span class="dash4-zone-top"><strong>' + escHtml(zone.name) + '</strong><span style="color:' + tone + ';">' + zone.count + '</span></span><span class="dash4-zone-track"><i style="width:' + width + '%;background:' + tone + ';"></i></span><span class="dash4-zone-note">' + (zone.count === 1 ? '1 signalement ouvert' : zone.count + ' signalements ouverts') + '</span></button>';
+  }).join('');
+};
+
+refreshDashFocus = function() {
+  var recentEl = $('dash-recent-list');
+  var zoneEl = $('dash-zone-list');
+  if (!recentEl || !zoneEl) return;
+  var filterBar = $('dash-focusbar');
+  if (filterBar) filterBar.querySelectorAll('[data-dash-focus]').forEach(function(btn) { btn.classList.toggle('is-active', btn.getAttribute('data-dash-focus') === _dashFocusMode); });
+  if ($('dash-focus-summary')) $('dash-focus-summary').textContent = getDashboardFocusLabel();
+  if ($('dash-zone-reset')) $('dash-zone-reset').style.display = _dashFocusMode === 'zone' ? '' : 'none';
+  recentEl.innerHTML = renderDashRecentListHTML(getDashTicketsForRecent());
+  zoneEl.innerHTML = renderDashZonesListHTML(getDashTicketsForZones());
+  renderDashChart();
+};
+
+renderDashboard = async function() {
+  var el = $('page');
+  if (!cache.tickets && !isCopro()) {
+    el.innerHTML = '<div style="padding:16px;">Chargement du tableau de bord...</div>';
+    return;
+  }
+  _dashFocusMode = 'tout';
+  _dashFocusZone = null;
+  var state = getDashboardState();
+  el.innerHTML = '<div class="dash4"><div class="dash4-shell"><section class="dash4-toolbar"><div class="dash4-toolbar-copy"><strong>Workspace dashboard</strong><span>Reorganisable, masquable et coherent en light comme en dark.</span></div><div class="dash4-toolbar-actions"><button class="btn btn-secondary" onclick="toggleDashboardCustomizer()">Personnaliser</button><button class="btn btn-ghost" onclick="nav(\'faq\')">Aide</button></div></section>' + renderDashboardCustomizer(state) + '<section id="dash-board" class="dash4-board">' + renderDashboardBoard(state) + '</section></div></div>';
+  initDashboardWidgetRail();
+  initDashboardResizeBinding();
+  loadDashboardWidgets();
+  renderDashChart();
+};
+
+loadDashboardWidgets = async function() {
+  var evtEl = $('dash-events-list');
+  var annEl = $('dash-annonces-list');
+  var now = new Date().toISOString();
+  var evtRes = await sb.from('evenements').select('*').gte('date_debut', now).order('date_debut').limit(4);
+  var events = evtRes.data || [];
+  if (evtEl) {
+    if (!events.length) evtEl.innerHTML = '<div class="dash4-empty">Aucun evenement a venir.</div>';
+    else evtEl.innerHTML = '<div class="dash4-list-stack">' + events.map(function(e) {
+      var type = (typeof EVENT_TYPES !== 'undefined' && EVENT_TYPES[e.type]) ? EVENT_TYPES[e.type] : { color: '#6b7280' };
+      var date = new Date(e.date_debut);
+      var soon = (date - new Date()) < 86400000;
+      return '<div class="dash4-list-item" onclick="nav(\'agenda\')"><span class="dash4-list-mark" style="background:' + (type.color || 'var(--dash4-accent)') + ';"></span><span class="dash4-list-copy"><strong>' + escHtml(e.titre) + '</strong><span>' + date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' · ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + (e.lieu ? ' · ' + escHtml(e.lieu) : '') + '</span></span><span class="dash4-list-meta">' + (soon ? 'Bientot' : 'Agenda') + '</span></div>';
+    }).join('') + '</div>';
+  }
+  if (evtEl) events.filter(function(e) { var diff = new Date(e.date_debut) - new Date(); return diff > 0 && diff < 86400000; }).forEach(function(e) { pushNotif('Rappel agenda', e.titre + ' demain a ' + new Date(e.date_debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }), 'statut_change', null); });
+  var annRes = await sb.from('annonces').select('*').order('epingle', { ascending: false }).order('created_at', { ascending: false }).limit(12);
+  var annonces = (annRes.data || []).filter(function(a) { return annonceReaderCanSee(a); }).slice(0, 3);
+  if (annEl) {
+    if (!annonces.length) annEl.innerHTML = '<div class="dash4-empty">Aucune annonce recente.</div>';
+    else annEl.innerHTML = '<div class="dash4-list-stack">' + annonces.map(function(a) {
+      var level = a.type === 'urgent' ? 'var(--dash4-danger)' : (a.type === 'important' ? 'var(--dash4-warning)' : 'var(--dash4-accent)');
+      var snippet = a.contenu ? a.contenu.substring(0, 92) + (a.contenu.length > 92 ? '...' : '') : 'Annonce sans apercu.';
+      return '<div class="dash4-list-item" onclick="nav(\'annonces\')"><span class="dash4-list-mark" style="background:' + level + ';"></span><span class="dash4-list-copy"><strong>' + escHtml(a.titre) + '</strong><span>' + escHtml(snippet) + '</span></span><span class="dash4-list-meta">' + (a.epingle ? 'Epinglee' : fmtD(a.created_at)) + '</span></div>';
+    }).join('') + '</div>';
+  }
+  renderDashChart();
+};
