@@ -510,6 +510,36 @@ function resetDashboardLayout() {
   if (typeof toast === 'function') toast('Cockpit reinitialise', 'ok');
 }
 
+function applyDashboardSmartLayout() {
+  var state = getDashboardState();
+  var order = ['hero', 'priorities', 'alerts', 'pulse', 'care', 'metrics', 'tickets', 'zones'];
+  if (isManager()) order.push('contrats');
+  order = order.concat(['activity', 'events', 'annonces', 'documents', 'votes', 'install']);
+  saveDashboardWidgetOrder(order);
+  setDashboardWidgetSizes({
+    hero: 'hero',
+    priorities: 'standard',
+    alerts: 'standard',
+    pulse: 'compact',
+    care: 'compact',
+    metrics: 'standard',
+    tickets: 'hero',
+    zones: 'standard',
+    contrats: 'standard',
+    activity: 'standard',
+    events: 'standard',
+    annonces: 'standard',
+    documents: 'standard',
+    votes: 'standard',
+    install: 'compact'
+  });
+  setDashboardVisibility({
+    install: !!state.docs.length || !!state.votesOuverts.length ? false : true
+  });
+  renderDashboard();
+  if (typeof toast === 'function') toast('Organisation optimisee appliquee', 'ok');
+}
+
 function getDashboardWidgetSizes() {
   try { return JSON.parse(localStorage.getItem(DASH_WIDGET_SIZE_KEY) || '{}') || {}; } catch (e) { return {}; }
 }
@@ -624,7 +654,7 @@ function buildDashboardCardShell(config, body, actionHTML) {
     + '<article class="dash4-card" draggable="false" data-widget-key="' + config.key + '" data-span="' + getDashboardCardSpan(config) + '" data-size="' + size + '" data-editing="' + (isEdit ? 'true' : 'false') + '">'
     + '<div class="dash4-card-head">'
     + '<div><h3>' + escHtml(config.title) + '</h3><p>' + escHtml(config.subtitle) + '</p></div>'
-    + '<div class="dash4-card-tools">' + (actionHTML || '') + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'' + config.key + '\')" title="Taille">' + size.charAt(0).toUpperCase() + '</button>' : '') + moveTools + '<button class="dash4-handle" type="button" draggable="false" title="Deplacer">::</button></div>'
+    + '<div class="dash4-card-tools">' + (actionHTML || '') + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'' + config.key + '\')" title="Taille">' + size.charAt(0).toUpperCase() + '</button>' : '') + moveTools + '</div>'
     + '</div>'
     + '<div class="dash4-card-body">' + body + '</div>'
     + '</article>';
@@ -640,7 +670,7 @@ function renderDashboardHeroCard(state) {
     + '<div><div class="dash4-hero-title">Bonjour ' + escHtml(getDashboardGreeting()) + ', pilotons la residence.</div><div class="dash4-hero-sub">' + escHtml(getDashboardSummaryText(state)) + '</div><div class="dash4-action-row"><button class="btn btn-primary" onclick="openNewTicket()">Nouveau signalement</button><button class="btn btn-secondary" onclick="nav(\'tickets\')">Tous les signalements</button><button class="btn btn-ghost" onclick="toggleDashboardCustomizer()">Personnaliser</button></div></div>'
     + '<div class="dash4-highlight"><span>Focus du jour</span><strong>' + state.ouverts.length + '</strong><p>tickets actifs a suivre, dont ' + state.critiques.length + ' critiques et ' + state.resolus.length + ' deja resolus.</p></div>'
     + '</div>';
-  return '<article class="dash4-card dash4-board-hero" draggable="false" data-widget-key="hero" data-span="' + getDashboardCardSpan(heroConfig) + '" data-size="' + getDashboardCardSize(heroConfig) + '" data-editing="' + (isEdit ? 'true' : 'false') + '"><div class="dash4-card-head"><div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-icon-btn" type="button" onclick="toggleDashboardCustomizer()" title="Personnaliser">+</button>' + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'hero\')" title="Taille">H</button>' : '') + moveTools + '<button class="dash4-handle" type="button" draggable="false" title="Deplacer">::</button></div></div><div class="dash4-card-body">' + body + '</div></article>';
+  return '<article class="dash4-card dash4-board-hero" draggable="false" data-widget-key="hero" data-span="' + getDashboardCardSpan(heroConfig) + '" data-size="' + getDashboardCardSize(heroConfig) + '" data-editing="' + (isEdit ? 'true' : 'false') + '"><div class="dash4-card-head"><div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-icon-btn" type="button" onclick="toggleDashboardCustomizer()" title="Personnaliser">+</button>' + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'hero\')" title="Taille">H</button>' : '') + moveTools + '</div></div><div class="dash4-card-body">' + body + '</div></article>';
 }
 
 function renderDashboardPrioritiesCard(state) {
@@ -780,14 +810,14 @@ function renderDashboardCustomizer(state) {
   var toggles = getDashboardWidgetCatalog(state).filter(function(item) { return item.hideable; }).map(function(item) {
     var hidden = !!visibility[item.key];
     var size = getDashboardCardSize(item);
-    return '<div class="dash4-toggle ' + (hidden ? 'is-hidden' : '') + '"><button class="dash4-toggle-main" onclick="toggleDashboardWidgetVisibility(\'' + item.key + '\')"><span class="dash4-toggle-text"><strong>' + escHtml(item.title) + '</strong><span>' + escHtml(item.subtitle) + '</span></span><span class="dash4-toggle-indicator"></span></button>' + (item.spans ? '<button class="dash4-size-chip" onclick="cycleDashboardWidgetSize(\'' + item.key + '\')">' + escHtml(size) + '</button>' : '') + '</div>';
+    return '<div class="dash4-toggle ' + (hidden ? 'is-hidden' : '') + '"><button class="dash4-toggle-main" onclick="toggleDashboardWidgetVisibility(\'' + item.key + '\')"><span class="dash4-toggle-text"><strong>' + escHtml(item.title) + '</strong><span>' + escHtml(item.subtitle) + '</span></span><span class="dash4-toggle-indicator"></span></button><div class="dash4-toggle-actions">' + (item.spans ? '<button class="dash4-size-chip" onclick="cycleDashboardWidgetSize(\'' + item.key + '\')">' + escHtml(size) + '</button>' : '') + '<button class="dash4-mini-btn" type="button" onclick="nudgeDashboardWidget(\'' + item.key + '\', -1)" title="Monter">↑</button><button class="dash4-mini-btn" type="button" onclick="nudgeDashboardWidget(\'' + item.key + '\', 1)" title="Descendre">↓</button></div></div>';
   }).join('');
-  return '<section id="dash-customize-panel" class="dash4-customize"><div class="dash4-customize-head"><div><h2>Composer votre dashboard</h2><p>Masque les blocs secondaires, choisis leur taille et active le vrai mode edition pour reorganiser le cockpit.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn ' + (getDashboardEditMode() ? 'btn-primary' : 'btn-secondary') + ' btn-sm" onclick="toggleDashboardEditMode()">' + (getDashboardEditMode() ? 'Quitter edition' : 'Mode edition') + '</button><button class="btn btn-ghost btn-sm" onclick="toggleDashboardCustomizer()">Fermer</button></div></div><div class="dash4-toggle-grid">' + toggles + '</div></section>';
+  return '<section id="dash-customize-panel" class="dash4-customize"><div class="dash4-customize-head"><div><h2>Composer votre dashboard</h2><p>Masque les blocs secondaires, ajuste leur taille et remonte ou descends les modules sans glisser-deposer.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-secondary btn-sm" onclick="applyDashboardSmartLayout()">Auto organiser</button><button class="btn ' + (getDashboardEditMode() ? 'btn-primary' : 'btn-secondary') + ' btn-sm" onclick="toggleDashboardEditMode()">' + (getDashboardEditMode() ? 'Quitter edition' : 'Mode edition') + '</button><button class="btn btn-ghost btn-sm" onclick="toggleDashboardCustomizer()">Fermer</button></div></div><div class="dash4-toggle-grid">' + toggles + '</div></section>';
 }
 
 function renderDashboardEditDock() {
   if (!getDashboardEditMode()) return '';
-  return '<aside class="dash4-edit-dock"><div class="dash4-edit-chip">Edition du cockpit</div><div class="dash4-edit-copy"><strong>Glisse les cartes, change leur taille, ou masque les secondaires.</strong><span>Le drag fonctionne en desktop. Sur mobile, utilise les boutons monter / descendre.</span></div><div class="dash4-edit-actions"><button class="btn btn-secondary btn-sm" onclick="toggleDashboardCustomizer()">Widgets</button><button class="btn btn-ghost btn-sm" onclick="resetDashboardLayout()">Reset layout</button><button class="btn btn-primary btn-sm" onclick="toggleDashboardEditMode()">Terminer</button></div></aside>';
+  return '<aside class="dash4-edit-dock"><div class="dash4-edit-chip">Edition du cockpit</div><div class="dash4-edit-copy"><strong>Organise les cartes sans friction: taille, ordre, masquage et remise en page auto.</strong><span>Utilise les boutons monter / descendre sur chaque carte ou dans le panneau Widgets.</span></div><div class="dash4-edit-actions"><button class="btn btn-secondary btn-sm" onclick="toggleDashboardCustomizer()">Widgets</button><button class="btn btn-secondary btn-sm" onclick="applyDashboardSmartLayout()">Auto organiser</button><button class="btn btn-ghost btn-sm" onclick="resetDashboardLayout()">Reset layout</button><button class="btn btn-primary btn-sm" onclick="toggleDashboardEditMode()">Terminer</button></div></aside>';
 }
 
 function renderDashboardBoard(state) {
@@ -808,39 +838,9 @@ function initDashboardWidgetRail() {
   var board = $('dash-board');
   if (!board || board.__dashReady) return;
   board.__dashReady = true;
-  if (window.Sortable && typeof window.Sortable.create === 'function') {
-    board.addEventListener('dragstart', function(e) {
-      if (e.target && e.target.closest && e.target.closest('.dash4-handle')) e.preventDefault();
-    });
-    _dashSortable = window.Sortable.create(board, {
-      draggable: '.dash4-card',
-      handle: '.dash4-handle',
-      dataIdAttr: 'data-widget-key',
-      animation: 180,
-      easing: 'cubic-bezier(.2,.84,.32,1)',
-      forceFallback: true,
-      fallbackTolerance: 4,
-      swapThreshold: 0.65,
-      invertSwap: true,
-      delayOnTouchOnly: true,
-      touchStartThreshold: 4,
-      disabled: !getDashboardEditMode(),
-      ghostClass: 'dash4-sortable-ghost',
-      chosenClass: 'dash4-sortable-chosen',
-      dragClass: 'dash4-sortable-drag',
-      filter: '.btn, .dash4-icon-btn:not(.dash4-handle), .dash4-toggle-main, .dash4-size-chip, input, textarea, select, a',
-      preventOnFilter: false,
-      onStart: function(evt) {
-        if (!getDashboardEditMode()) return false;
-        evt.item.classList.add('is-dragging');
-      },
-      onEnd: function(evt) {
-        evt.item.classList.remove('is-dragging');
-        saveDashboardWidgetOrderFromDOM();
-      }
-    });
-    return;
-  }
+  if (_dashSortable && typeof _dashSortable.destroy === 'function') _dashSortable.destroy();
+  _dashSortable = null;
+  return;
   function clearDragState() {
     _dashWidgetDragKey = null;
     _dashPointerDrag = null;
@@ -971,7 +971,7 @@ renderDashboard = async function() {
   _dashFocusZone = null;
   var state = getDashboardState();
   var editMode = getDashboardEditMode();
-  el.innerHTML = '<div class="dash4" data-editing="' + (editMode ? 'true' : 'false') + '"><div class="dash4-shell"><section class="dash4-toolbar"><div class="dash4-toolbar-copy"><strong>Workspace dashboard</strong><span>' + (editMode ? 'Mode edition actif: glisse, redimensionne et masque les widgets a ta guise.' : 'Reorganisable, masquable et coherent en light comme en dark.') + '</span></div><div class="dash4-toolbar-actions"><button class="btn ' + (editMode ? 'btn-primary' : 'btn-secondary') + '" onclick="toggleDashboardEditMode()">' + (editMode ? 'Edition active' : 'Mode edition') + '</button><button class="btn btn-secondary" onclick="toggleDashboardCustomizer()">Personnaliser</button><button class="btn btn-ghost" onclick="nav(\'faq\')">Aide</button></div></section>' + renderDashboardEditDock() + renderDashboardCustomizer(state) + '<section id="dash-board" class="dash4-board">' + renderDashboardBoard(state) + '</section></div></div>';
+  el.innerHTML = '<div class="dash4" data-editing="' + (editMode ? 'true' : 'false') + '"><div class="dash4-shell"><section class="dash4-toolbar"><div class="dash4-toolbar-copy"><strong>Workspace dashboard</strong><span>' + (editMode ? 'Mode edition actif: organise, redimensionne et masque les widgets a ta guise.' : 'Reorganisable, masquable et coherent en light comme en dark.') + '</span></div><div class="dash4-toolbar-actions"><button class="btn ' + (editMode ? 'btn-primary' : 'btn-secondary') + '" onclick="toggleDashboardEditMode()">' + (editMode ? 'Edition active' : 'Mode edition') + '</button><button class="btn btn-secondary" onclick="toggleDashboardCustomizer()">Personnaliser</button><button class="btn btn-ghost" onclick="nav(\'faq\')">Aide</button></div></section>' + renderDashboardEditDock() + renderDashboardCustomizer(state) + '<section id="dash-board" class="dash4-board">' + renderDashboardBoard(state) + '</section></div></div>';
   initDashboardWidgetRail();
   initDashboardResizeBinding();
   loadDashboardWidgets();

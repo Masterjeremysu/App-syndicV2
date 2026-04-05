@@ -1415,6 +1415,11 @@ body {
   text-align: left;
   cursor: pointer;
 }
+.dash4-toggle-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .dash4-toggle:hover {
   transform: translateY(-1px);
   box-shadow: var(--dash4-shadow-soft);
@@ -1455,6 +1460,16 @@ body {
   text-transform: uppercase;
   letter-spacing: .08em;
   cursor: pointer;
+}
+.dash4-mini-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--dash4-border);
+  border-radius: 12px;
+  background: var(--dash4-surface-muted);
+  color: var(--dash4-text-strong);
+  cursor: pointer;
+  font-weight: 800;
 }
 .dash4-board {
   display: grid;
@@ -1526,7 +1541,6 @@ body {
   align-items: center;
   gap: 8px;
 }
-.dash4-handle,
 .dash4-icon-btn {
   width: 34px;
   height: 34px;
@@ -1540,38 +1554,19 @@ body {
   cursor: pointer;
   transition: all .18s ease;
 }
-.dash4-handle:hover,
-.dash4-icon-btn:hover {
+.dash4-icon-btn:hover,
+.dash4-mini-btn:hover {
   color: var(--dash4-text-strong);
   border-color: var(--dash4-border-strong);
 }
-.dash4-handle {
-  cursor: grab;
-  font-size: 14px;
-  font-weight: 900;
-  opacity: 0;
-  transform: translateY(4px);
-  pointer-events: none;
-  touch-action: none;
-  user-select: none;
-}
-.dash4[data-editing="true"] .dash4-handle {
-  box-shadow: inset 0 0 0 1px rgba(37,99,235,.08);
-}
-.dash4[data-editing="true"] .dash4-handle::before {
-  content: 'drag';
-  font-size: 9px;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-.dash4[data-editing="true"] .dash4-handle,
-.dash4[data-editing="true"] .dash4-icon-btn {
+.dash4[data-editing="true"] .dash4-icon-btn,
+.dash4[data-editing="true"] .dash4-mini-btn {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
 }
 .dash4-move-btn {
-  display: none;
+  display: inline-flex;
 }
 .dash4[data-editing="false"] .dash4-icon-btn {
   opacity: 1;
@@ -2104,18 +2099,6 @@ body {
   height: 100%;
   border-radius: inherit;
 }
-.dash4-sortable-ghost {
-  opacity: .38;
-  border-color: var(--dash4-accent) !important;
-  box-shadow: 0 0 0 2px rgba(37,99,235,.12);
-}
-.dash4-sortable-chosen {
-  transform: scale(.985);
-  box-shadow: 0 28px 54px rgba(36,89,212,.16);
-}
-.dash4-sortable-drag {
-  cursor: grabbing !important;
-}
 [data-theme="dark"] .dash4-toolbar-copy span,
 [data-theme="dark"] .dash4-edit-copy span,
 [data-theme="dark"] .dash4-card-head p,
@@ -2425,11 +2408,11 @@ body {
     grid-template-columns: 1fr;
     gap: 8px;
   }
-  .dash4-move-btn {
-    display: inline-flex;
+  .dash4-toggle {
+    flex-direction: column;
   }
-  .dash4-handle {
-    display: none;
+  .dash4-toggle-actions {
+    justify-content: flex-start;
   }
   .tickets4-hero,
   .tickets4-card {
