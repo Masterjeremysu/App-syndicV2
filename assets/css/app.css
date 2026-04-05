@@ -2109,6 +2109,18 @@ body {
   height: 100%;
   border-radius: inherit;
 }
+.dash4-sortable-ghost {
+  opacity: .38;
+  border-color: var(--dash4-accent) !important;
+  box-shadow: 0 0 0 2px rgba(37,99,235,.12);
+}
+.dash4-sortable-chosen {
+  transform: scale(.985);
+  box-shadow: 0 28px 54px rgba(36,89,212,.16);
+}
+.dash4-sortable-drag {
+  cursor: grabbing !important;
+}
 [data-theme="dark"] .dash4-toolbar-copy span,
 [data-theme="dark"] .dash4-edit-copy span,
 [data-theme="dark"] .dash4-card-head p,
@@ -2154,6 +2166,228 @@ body {
 [data-theme="dark"] .dash4-highlight {
   background: rgba(18,17,16,.65);
 }
+
+/* ── Tickets page v4 ── */
+.tickets4 {
+  display: grid;
+  gap: 18px;
+  padding: 8px 0 80px;
+}
+.tickets4-hero,
+.tickets4-stats,
+.tickets4-card {
+  position: relative;
+  z-index: 1;
+}
+.tickets4-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 28px;
+  border: 1px solid rgba(37,99,235,.10);
+  border-radius: 30px;
+  background:
+    radial-gradient(480px 200px at 0% 0%, rgba(37,99,235,.09), transparent 70%),
+    radial-gradient(400px 180px at 100% 0%, rgba(249,115,22,.08), transparent 68%),
+    linear-gradient(180deg, rgba(255,255,255,.56), transparent 24%),
+    var(--surface);
+  box-shadow: 0 20px 48px rgba(20,20,20,.05);
+}
+.tickets4-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.tickets4-hero h1 {
+  margin-top: 8px;
+  font-family: var(--font-head);
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: .96;
+  letter-spacing: -.06em;
+}
+.tickets4-hero p,
+.tickets4-sub {
+  margin-top: 8px;
+  color: var(--text-2);
+}
+.tickets4-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.tickets4-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.tickets4-stat {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.tickets4-stat:hover,
+.tickets4-row:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+.tickets4-stat small {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--text-3);
+}
+.tickets4-stat strong {
+  display: block;
+  margin-top: 12px;
+  font-family: var(--font-head);
+  font-size: 40px;
+  line-height: .92;
+}
+.tickets4-stat span {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.tickets4-card {
+  overflow: hidden;
+  border-radius: 30px;
+}
+.tickets4-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tickets4-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.tickets4-head-actions strong {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.tickets4-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.tickets4-filter-group {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.tickets4-filter-group > span {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--text-3);
+}
+.tickets4-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tickets4-pill {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-weight: 700;
+  cursor: pointer;
+}
+.tickets4-pill.is-active {
+  background: var(--text);
+  color: #fff;
+  border-color: var(--text);
+}
+.tickets4-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+.tickets4-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255,255,255,.45), transparent 50%), var(--surface);
+  text-align: left;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.tickets4-row-main,
+.tickets4-row-side {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+}
+.tickets4-row-main {
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.tickets4-row-title {
+  font-family: var(--font-head);
+  font-size: 20px;
+  line-height: 1.05;
+  letter-spacing: -.04em;
+  color: var(--text);
+}
+.tickets4-row-meta {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.tickets4-row-side .badge {
+  white-space: nowrap;
+}
+[data-theme="dark"] .tickets4-hero,
+[data-theme="dark"] .tickets4-stat,
+[data-theme="dark"] .tickets4-row {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.03), transparent 24%),
+    #1c1b19;
+  border-color: #2e2c29;
+}
+[data-theme="dark"] .tickets4-pill {
+  background: #1c1b19;
+  border-color: #2e2c29;
+  color: #d8d1c5;
+}
+[data-theme="dark"] .tickets4-pill.is-active {
+  background: #f5f2eb;
+  color: #1a1816;
+  border-color: #f5f2eb;
+}
+[data-theme="dark"] .tickets4-row-title {
+  color: #f3eee6;
+}
+[data-theme="dark"] .tickets4-row-meta,
+[data-theme="dark"] .tickets4-hero p,
+[data-theme="dark"] .tickets4-sub,
+[data-theme="dark"] .tickets4-head-actions strong {
+  color: #a69a8a;
+}
 @media (max-width: 1180px) {
   .dash4-toggle-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dash4-card[data-span="8"],
@@ -2162,6 +2396,7 @@ body {
   .dash4-card[data-span="5"] { grid-column: span 12; }
   .dash4-card[data-span="4"],
   .dash4-card[data-span="3"] { grid-column: span 6; }
+  .tickets4-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
   .dash4-board { grid-template-columns: 1fr; }
@@ -2200,6 +2435,26 @@ body {
   }
   .dash4-handle {
     display: none;
+  }
+  .tickets4-hero,
+  .tickets4-card {
+    border-radius: 24px;
+  }
+  .tickets4-hero,
+  .tickets4-card-head,
+  .tickets4-toolbar,
+  .tickets4-row {
+    grid-template-columns: 1fr;
+  }
+  .tickets4-stats {
+    grid-template-columns: 1fr;
+  }
+  .tickets4-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+  .tickets4-row-side {
+    justify-content: flex-start;
   }
 }
 

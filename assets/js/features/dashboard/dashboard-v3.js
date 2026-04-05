@@ -1,5 +1,6 @@
 let _dashWidgetDragKey = null;
 let _dashPointerDrag = null;
+let _dashSortable = null;
 let _dashResizeBound = false;
 const DASH_WIDGET_ORDER_KEY = 'coprosync_dash_widget_order_v3';
 
@@ -801,6 +802,36 @@ function initDashboardWidgetRail() {
   var board = $('dash-board');
   if (!board || board.__dashReady) return;
   board.__dashReady = true;
+  if (window.Sortable && typeof window.Sortable.create === 'function') {
+    _dashSortable = window.Sortable.create(board, {
+      draggable: '.dash4-card',
+      handle: '.dash4-handle',
+      dataIdAttr: 'data-widget-key',
+      animation: 180,
+      easing: 'cubic-bezier(.2,.84,.32,1)',
+      forceFallback: true,
+      fallbackTolerance: 4,
+      swapThreshold: 0.65,
+      invertSwap: true,
+      delayOnTouchOnly: true,
+      touchStartThreshold: 4,
+      disabled: !getDashboardEditMode(),
+      ghostClass: 'dash4-sortable-ghost',
+      chosenClass: 'dash4-sortable-chosen',
+      dragClass: 'dash4-sortable-drag',
+      filter: '.btn, .dash4-icon-btn:not(.dash4-handle), .dash4-toggle-main, .dash4-size-chip, input, textarea, select, a',
+      preventOnFilter: false,
+      onStart: function(evt) {
+        if (!getDashboardEditMode()) return false;
+        evt.item.classList.add('is-dragging');
+      },
+      onEnd: function(evt) {
+        evt.item.classList.remove('is-dragging');
+        saveDashboardWidgetOrderFromDOM();
+      }
+    });
+    return;
+  }
   function clearDragState() {
     _dashWidgetDragKey = null;
     _dashPointerDrag = null;
