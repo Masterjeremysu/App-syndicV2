@@ -1459,6 +1459,7 @@ body {
 .dash4-board {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-flow: dense;
   gap: 16px;
   align-items: start;
 }
@@ -1551,6 +1552,23 @@ body {
   opacity: 0;
   transform: translateY(4px);
   pointer-events: none;
+  touch-action: none;
+  user-select: none;
+}
+.dash4-handle[draggable="true"] {
+  cursor: grab;
+}
+.dash4-handle[draggable="true"]:active {
+  cursor: grabbing;
+}
+.dash4[data-editing="true"] .dash4-handle {
+  box-shadow: inset 0 0 0 1px rgba(37,99,235,.08);
+}
+.dash4[data-editing="true"] .dash4-handle::before {
+  content: 'drag';
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 .dash4[data-editing="true"] .dash4-handle,
 .dash4[data-editing="true"] .dash4-icon-btn {
@@ -2033,6 +2051,64 @@ body {
 .dash4-pulse-event {
   grid-column: span 2;
 }
+.dash4-care-score {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1px solid var(--dash4-border);
+  border-radius: 22px;
+  background:
+    radial-gradient(120px 70px at 100% 0%, color-mix(in srgb, var(--dash4-warning) 16%, transparent), transparent 72%),
+    linear-gradient(180deg, rgba(255,255,255,.35), transparent 36%),
+    var(--dash4-surface-muted);
+}
+.dash4-care-score span {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--dash4-text-soft);
+}
+.dash4-care-score strong {
+  font-family: var(--font-head);
+  font-size: clamp(2.1rem, 4vw, 3rem);
+  line-height: .95;
+  letter-spacing: -.06em;
+  color: var(--dash4-text-strong);
+}
+.dash4-care-score small {
+  font-size: 13px;
+  color: var(--dash4-text-soft);
+}
+.dash4-care-bars {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.dash4-care-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.dash4-care-row span,
+.dash4-care-row strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dash4-text-strong);
+}
+.dash4-care-row i {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--dash4-border-strong) 42%, transparent);
+}
+.dash4-care-row b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
 [data-theme="dark"] .dash4-toolbar-copy span,
 [data-theme="dark"] .dash4-edit-copy span,
 [data-theme="dark"] .dash4-card-head p,
@@ -2114,6 +2190,10 @@ body {
   }
   .dash4-pulse-event {
     grid-column: span 1;
+  }
+  .dash4-care-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
   .dash4-move-btn {
     display: inline-flex;

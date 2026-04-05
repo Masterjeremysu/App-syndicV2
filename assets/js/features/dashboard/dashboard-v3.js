@@ -1,4 +1,5 @@
 let _dashWidgetDragKey = null;
+let _dashPointerDrag = null;
 let _dashResizeBound = false;
 const DASH_WIDGET_ORDER_KEY = 'coprosync_dash_widget_order_v3';
 
@@ -557,6 +558,7 @@ function getDashboardWidgetCatalog(state) {
     { key: 'priorities', title: 'Actions prioritaires', subtitle: 'Urgences et arbitrages', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardPrioritiesCard(state); } },
     { key: 'alerts', title: 'Centre d alertes', subtitle: 'Ce qui peut deraper vite', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 5, hero: 8 }, render: function() { return renderDashboardAlertsCard(state); } },
     { key: 'pulse', title: 'Pulse copro', subtitle: 'Suivi quotidien ultra rapide', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardPulseCard(state); } },
+    { key: 'care', title: 'Sante residence', subtitle: 'Niveau de tension de la copropriete', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardCareCard(state); } },
     { key: 'metrics', title: 'Chiffres clefs', subtitle: 'Synthese instantanee', hideable: true, defaultSize: 'standard', spans: { compact: 6, standard: 12, hero: 12 }, render: function() { return renderDashboardMetricsCard(state); } },
     { key: 'tickets', title: 'File de traitement', subtitle: 'Tickets a lire maintenant', hideable: true, defaultSize: 'hero', spans: { compact: 5, standard: 7, hero: 12 }, render: function() { return renderDashboardTicketsCard(state); } },
     { key: 'zones', title: 'Zones sous tension', subtitle: 'Focus batiment et zone', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 5, hero: 8 }, render: function() { return renderDashboardZonesCard(state); } },
@@ -614,10 +616,10 @@ function buildDashboardCardShell(config, body, actionHTML) {
   var size = getDashboardCardSize(config);
   var moveTools = isEdit ? '<button class="dash4-icon-btn dash4-move-btn" type="button" onclick="nudgeDashboardWidget(\'' + config.key + '\', -1)" title="Monter">↑</button><button class="dash4-icon-btn dash4-move-btn" type="button" onclick="nudgeDashboardWidget(\'' + config.key + '\', 1)" title="Descendre">↓</button>' : '';
   return ''
-    + '<article class="dash4-card" draggable="' + (isEdit ? 'true' : 'false') + '" data-widget-key="' + config.key + '" data-span="' + getDashboardCardSpan(config) + '" data-size="' + size + '" data-editing="' + (isEdit ? 'true' : 'false') + '">'
+    + '<article class="dash4-card" draggable="false" data-widget-key="' + config.key + '" data-span="' + getDashboardCardSpan(config) + '" data-size="' + size + '" data-editing="' + (isEdit ? 'true' : 'false') + '">'
     + '<div class="dash4-card-head">'
     + '<div><h3>' + escHtml(config.title) + '</h3><p>' + escHtml(config.subtitle) + '</p></div>'
-    + '<div class="dash4-card-tools">' + (actionHTML || '') + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'' + config.key + '\')" title="Taille">' + size.charAt(0).toUpperCase() + '</button>' : '') + moveTools + '<button class="dash4-handle" type="button" title="Deplacer">::</button></div>'
+    + '<div class="dash4-card-tools">' + (actionHTML || '') + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'' + config.key + '\')" title="Taille">' + size.charAt(0).toUpperCase() + '</button>' : '') + moveTools + '<button class="dash4-handle" type="button" draggable="' + (isEdit ? 'true' : 'false') + '" title="Deplacer">::</button></div>'
     + '</div>'
     + '<div class="dash4-card-body">' + body + '</div>'
     + '</article>';
@@ -633,7 +635,7 @@ function renderDashboardHeroCard(state) {
     + '<div><div class="dash4-hero-title">Bonjour ' + escHtml(getDashboardGreeting()) + ', pilotons la residence.</div><div class="dash4-hero-sub">' + escHtml(getDashboardSummaryText(state)) + '</div><div class="dash4-action-row"><button class="btn btn-primary" onclick="openNewTicket()">Nouveau signalement</button><button class="btn btn-secondary" onclick="nav(\'tickets\')">Tous les signalements</button><button class="btn btn-ghost" onclick="toggleDashboardCustomizer()">Personnaliser</button></div></div>'
     + '<div class="dash4-highlight"><span>Focus du jour</span><strong>' + state.ouverts.length + '</strong><p>tickets actifs a suivre, dont ' + state.critiques.length + ' critiques et ' + state.resolus.length + ' deja resolus.</p></div>'
     + '</div>';
-  return '<article class="dash4-card dash4-board-hero" draggable="' + (isEdit ? 'true' : 'false') + '" data-widget-key="hero" data-span="' + getDashboardCardSpan(heroConfig) + '" data-size="' + getDashboardCardSize(heroConfig) + '" data-editing="' + (isEdit ? 'true' : 'false') + '"><div class="dash4-card-head"><div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-icon-btn" type="button" onclick="toggleDashboardCustomizer()" title="Personnaliser">+</button>' + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'hero\')" title="Taille">H</button>' : '') + moveTools + '<button class="dash4-handle" type="button" title="Deplacer">::</button></div></div><div class="dash4-card-body">' + body + '</div></article>';
+  return '<article class="dash4-card dash4-board-hero" draggable="false" data-widget-key="hero" data-span="' + getDashboardCardSpan(heroConfig) + '" data-size="' + getDashboardCardSize(heroConfig) + '" data-editing="' + (isEdit ? 'true' : 'false') + '"><div class="dash4-card-head"><div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-icon-btn" type="button" onclick="toggleDashboardCustomizer()" title="Personnaliser">+</button>' + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'hero\')" title="Taille">H</button>' : '') + moveTools + '<button class="dash4-handle" type="button" draggable="' + (isEdit ? 'true' : 'false') + '" title="Deplacer">::</button></div></div><div class="dash4-card-body">' + body + '</div></article>';
 }
 
 function renderDashboardPrioritiesCard(state) {
@@ -675,6 +677,24 @@ function renderDashboardPulseCard(state) {
     + '<div class="dash4-pulse"><span>A voter</span><strong>' + openVotes + '</strong><small>votes encore sans reponse</small></div>'
     + '<div class="dash4-pulse dash4-pulse-event"><span>Prochain rdv</span><strong>' + (nextEvent ? nextEvent.titre : 'Rien de prevu') + '</strong><small>' + (nextEvent ? fmtD(nextEvent.date_debut) : 'Agenda calme') + '</small></div>';
   return buildDashboardCardShell({ key: 'pulse', title: 'Pulse copro', subtitle: 'Quatre indicateurs simples pour agir tout de suite.', span: 4 }, '<div class="dash4-pulse-grid">' + body + '</div>', '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'notifications\')">Historique</button>');
+}
+
+function renderDashboardCareCard(state) {
+  var unresolvedCritical = state.critiques.length;
+  var syndicPending = state.syndic.length;
+  var contractWatch = state.contratsExpires.length + state.contratsAlertes.length;
+  var votesWaiting = state.votesEnAttente.length;
+  var total = unresolvedCritical * 4 + syndicPending * 2 + contractWatch * 2 + votesWaiting;
+  var level = total >= 12 ? 'Alerte haute' : (total >= 6 ? 'Sous tension' : 'Stable');
+  var body = ''
+    + '<div class="dash4-care-score"><span>Sante residence</span><strong>' + Math.max(0, 100 - total * 4) + '</strong><small>' + level + '</small></div>'
+    + '<div class="dash4-care-bars">'
+    + '<div class="dash4-care-row"><span>Incidents critiques</span><i><b style="width:' + Math.min(100, unresolvedCritical * 20) + '%;background:var(--dash4-danger);"></b></i><strong>' + unresolvedCritical + '</strong></div>'
+    + '<div class="dash4-care-row"><span>Dossiers syndic</span><i><b style="width:' + Math.min(100, syndicPending * 18) + '%;background:var(--dash4-warning);"></b></i><strong>' + syndicPending + '</strong></div>'
+    + '<div class="dash4-care-row"><span>Contrats sensibles</span><i><b style="width:' + Math.min(100, contractWatch * 18) + '%;background:var(--dash4-accent);"></b></i><strong>' + contractWatch + '</strong></div>'
+    + '<div class="dash4-care-row"><span>Votes en attente</span><i><b style="width:' + Math.min(100, votesWaiting * 18) + '%;background:var(--dash4-success);"></b></i><strong>' + votesWaiting + '</strong></div>'
+    + '</div>';
+  return buildDashboardCardShell({ key: 'care', title: 'Sante residence', subtitle: 'Lecture globale du niveau de tension de la copropriete.', span: 4 }, body, '<button class="btn btn-ghost btn-sm" type="button" onclick="setDashFocus(\'critique\')">Prioriser</button>');
 }
 
 function renderDashboardMetricsCard(state) {
@@ -781,9 +801,63 @@ function initDashboardWidgetRail() {
   var board = $('dash-board');
   if (!board || board.__dashReady) return;
   board.__dashReady = true;
+  function clearDragState() {
+    _dashWidgetDragKey = null;
+    _dashPointerDrag = null;
+    board.querySelectorAll('.dash4-card').forEach(function(node) {
+      node.classList.remove('is-dragging');
+      node.removeAttribute('data-drag-over');
+    });
+    saveDashboardWidgetOrderFromDOM();
+  }
+  function moveCardAtPoint(clientX, clientY) {
+    if (!getDashboardEditMode() || !_dashPointerDrag || !_dashPointerDrag.card || !_dashPointerDrag.board) return;
+    var overNode = document.elementFromPoint(clientX, clientY);
+    if (!overNode) return;
+    var over = overNode.closest('.dash4-card');
+    var dragging = _dashPointerDrag.card;
+    if (!over || !board.contains(over) || over === dragging) return;
+    board.querySelectorAll('.dash4-card').forEach(function(node) { node.removeAttribute('data-drag-over'); });
+    over.setAttribute('data-drag-over', 'true');
+    var rect = over.getBoundingClientRect();
+    var horizontal = Math.abs(rect.width) > Math.abs(rect.height) * 1.1;
+    var after = horizontal ? (clientX > rect.left + rect.width / 2) : (clientY > rect.top + rect.height / 2);
+    board.insertBefore(dragging, after ? over.nextSibling : over);
+  }
+  board.addEventListener('pointerdown', function(e) {
+    if (!getDashboardEditMode()) return;
+    var handle = e.target.closest('.dash4-handle');
+    if (!handle) return;
+    var card = handle.closest('.dash4-card');
+    if (!card) return;
+    _dashWidgetDragKey = card.getAttribute('data-widget-key');
+    _dashPointerDrag = { key: _dashWidgetDragKey, card: card, board: board, pointerId: e.pointerId };
+    card.classList.add('is-dragging');
+    try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault();
+  });
+  board.addEventListener('pointermove', function(e) {
+    if (!getDashboardEditMode() || !_dashPointerDrag) return;
+    moveCardAtPoint(e.clientX, e.clientY);
+    e.preventDefault();
+  });
+  board.addEventListener('pointerup', function(e) {
+    if (!_dashPointerDrag) return;
+    var handle = e.target.closest('.dash4-handle');
+    if (handle) {
+      try { handle.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+    clearDragState();
+  });
+  board.addEventListener('pointercancel', function() {
+    if (!_dashPointerDrag) return;
+    clearDragState();
+  });
   board.addEventListener('dragstart', function(e) {
     if (!getDashboardEditMode()) return;
-    var card = e.target.closest('.dash4-card');
+    var handle = e.target.closest('.dash4-handle');
+    if (!handle) return;
+    var card = handle.closest('.dash4-card');
     if (!card) return;
     _dashWidgetDragKey = card.getAttribute('data-widget-key');
     card.classList.add('is-dragging');
@@ -794,9 +868,7 @@ function initDashboardWidgetRail() {
   });
   board.addEventListener('dragend', function() {
     if (!getDashboardEditMode()) return;
-    _dashWidgetDragKey = null;
-    board.querySelectorAll('.dash4-card').forEach(function(node) { node.classList.remove('is-dragging'); node.removeAttribute('data-drag-over'); });
-    saveDashboardWidgetOrderFromDOM();
+    clearDragState();
   });
   board.addEventListener('dragover', function(e) {
     if (!getDashboardEditMode() || !_dashWidgetDragKey) return;
@@ -813,8 +885,7 @@ function initDashboardWidgetRail() {
   board.addEventListener('drop', function(e) {
     if (!getDashboardEditMode()) return;
     e.preventDefault();
-    board.querySelectorAll('.dash4-card').forEach(function(node) { node.removeAttribute('data-drag-over'); });
-    saveDashboardWidgetOrderFromDOM();
+    clearDragState();
   });
 }
 
