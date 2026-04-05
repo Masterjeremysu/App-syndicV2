@@ -2,6 +2,7 @@ let _dashWidgetDragKey = null;
 let _dashPointerDrag = null;
 let _dashSortable = null;
 let _dashResizeBound = false;
+let _dashCustomizerOpen = false;
 const DASH_WIDGET_ORDER_KEY = 'coprosync_dash_widget_order_v4';
 
 function isResolvedStatut(statut) {
@@ -635,8 +636,12 @@ function getDashboardBoardOrder(state) {
 }
 
 function toggleDashboardCustomizer() {
+  _dashCustomizerOpen = !_dashCustomizerOpen;
   var panel = $('dash-customize-panel');
-  if (panel) panel.classList.toggle('is-open');
+  if (panel) {
+    panel.classList.toggle('is-open', _dashCustomizerOpen);
+    panel.setAttribute('aria-hidden', _dashCustomizerOpen ? 'false' : 'true');
+  }
 }
 
 function toggleDashboardWidgetVisibility(key) {
