@@ -495,6 +495,15 @@ function toggleDashboardEditMode() {
   renderDashboard();
 }
 
+function resetDashboardLayout() {
+  try { localStorage.removeItem(DASH_WIDGET_ORDER_KEY); } catch (e) {}
+  try { localStorage.removeItem(DASH_WIDGET_SIZE_KEY); } catch (e) {}
+  try { localStorage.removeItem(DASH_WIDGET_VISIBILITY_KEY); } catch (e) {}
+  setDashboardEditMode(false);
+  renderDashboard();
+  if (typeof toast === 'function') toast('Cockpit reinitialise', 'ok');
+}
+
 function getDashboardWidgetSizes() {
   try { return JSON.parse(localStorage.getItem(DASH_WIDGET_SIZE_KEY) || '{}') || {}; } catch (e) { return {}; }
 }
@@ -547,6 +556,7 @@ function getDashboardWidgetCatalog(state) {
     { key: 'hero', title: 'Pilotage', subtitle: 'Entree de tableau de bord', hideable: false, defaultSize: 'hero', spans: { standard: 8, hero: 12 }, render: function() { return renderDashboardHeroCard(state); } },
     { key: 'priorities', title: 'Actions prioritaires', subtitle: 'Urgences et arbitrages', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardPrioritiesCard(state); } },
     { key: 'alerts', title: 'Centre d alertes', subtitle: 'Ce qui peut deraper vite', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 5, hero: 8 }, render: function() { return renderDashboardAlertsCard(state); } },
+    { key: 'pulse', title: 'Pulse copro', subtitle: 'Suivi quotidien ultra rapide', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardPulseCard(state); } },
     { key: 'metrics', title: 'Chiffres clefs', subtitle: 'Synthese instantanee', hideable: true, defaultSize: 'standard', spans: { compact: 6, standard: 12, hero: 12 }, render: function() { return renderDashboardMetricsCard(state); } },
     { key: 'tickets', title: 'File de traitement', subtitle: 'Tickets a lire maintenant', hideable: true, defaultSize: 'hero', spans: { compact: 5, standard: 7, hero: 12 }, render: function() { return renderDashboardTicketsCard(state); } },
     { key: 'zones', title: 'Zones sous tension', subtitle: 'Focus batiment et zone', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 5, hero: 8 }, render: function() { return renderDashboardZonesCard(state); } },
@@ -654,6 +664,19 @@ function renderDashboardAlertsCard(state) {
   return buildDashboardCardShell({ key: 'alerts', title: 'Centre d alertes', subtitle: 'Ce qui peut deraper vite, pour garder la residence sous controle.', span: 5 }, body, '<button class="btn btn-ghost btn-sm" type="button" onclick="toggleDashboardCustomizer()">Regler</button>');
 }
 
+function renderDashboardPulseCard(state) {
+  var oldTickets = state.ouverts.filter(function(t) { return Math.floor((Date.now() - new Date(t.created_at).getTime()) / 864e5) >= 3; }).length;
+  var unseenDocs = state.docs.filter(function(doc) { return typeof _docsVus !== 'undefined' ? !_docsVus.has(doc.id) : false; }).length;
+  var openVotes = state.votesEnAttente.length;
+  var nextEvent = (cache.evenements || []).filter(function(e) { return new Date(e.date_debut) > new Date(); }).sort(function(a, b) { return new Date(a.date_debut) - new Date(b.date_debut); })[0];
+  var body = ''
+    + '<div class="dash4-pulse"><span>A relancer</span><strong>' + oldTickets + '</strong><small>tickets ouverts depuis plus de 3 jours</small></div>'
+    + '<div class="dash4-pulse"><span>A lire</span><strong>' + unseenDocs + '</strong><small>documents recents non consultes</small></div>'
+    + '<div class="dash4-pulse"><span>A voter</span><strong>' + openVotes + '</strong><small>votes encore sans reponse</small></div>'
+    + '<div class="dash4-pulse dash4-pulse-event"><span>Prochain rdv</span><strong>' + (nextEvent ? nextEvent.titre : 'Rien de prevu') + '</strong><small>' + (nextEvent ? fmtD(nextEvent.date_debut) : 'Agenda calme') + '</small></div>';
+  return buildDashboardCardShell({ key: 'pulse', title: 'Pulse copro', subtitle: 'Quatre indicateurs simples pour agir tout de suite.', span: 4 }, '<div class="dash4-pulse-grid">' + body + '</div>', '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'notifications\')">Historique</button>');
+}
+
 function renderDashboardMetricsCard(state) {
   var openOrMine = isManager() ? state.syndic.length : state.mine.length;
   var body = ''
@@ -733,6 +756,11 @@ function renderDashboardCustomizer(state) {
     return '<div class="dash4-toggle ' + (hidden ? 'is-hidden' : '') + '"><button class="dash4-toggle-main" onclick="toggleDashboardWidgetVisibility(\'' + item.key + '\')"><span class="dash4-toggle-text"><strong>' + escHtml(item.title) + '</strong><span>' + escHtml(item.subtitle) + '</span></span><span class="dash4-toggle-indicator"></span></button>' + (item.spans ? '<button class="dash4-size-chip" onclick="cycleDashboardWidgetSize(\'' + item.key + '\')">' + escHtml(size) + '</button>' : '') + '</div>';
   }).join('');
   return '<section id="dash-customize-panel" class="dash4-customize"><div class="dash4-customize-head"><div><h2>Composer votre dashboard</h2><p>Masque les blocs secondaires, choisis leur taille et active le vrai mode edition pour reorganiser le cockpit.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn ' + (getDashboardEditMode() ? 'btn-primary' : 'btn-secondary') + ' btn-sm" onclick="toggleDashboardEditMode()">' + (getDashboardEditMode() ? 'Quitter edition' : 'Mode edition') + '</button><button class="btn btn-ghost btn-sm" onclick="toggleDashboardCustomizer()">Fermer</button></div></div><div class="dash4-toggle-grid">' + toggles + '</div></section>';
+}
+
+function renderDashboardEditDock() {
+  if (!getDashboardEditMode()) return '';
+  return '<aside class="dash4-edit-dock"><div class="dash4-edit-chip">Edition du cockpit</div><div class="dash4-edit-copy"><strong>Glisse les cartes, change leur taille, ou masque les secondaires.</strong><span>Le drag fonctionne en desktop. Sur mobile, utilise les boutons monter / descendre.</span></div><div class="dash4-edit-actions"><button class="btn btn-secondary btn-sm" onclick="toggleDashboardCustomizer()">Widgets</button><button class="btn btn-ghost btn-sm" onclick="resetDashboardLayout()">Reset layout</button><button class="btn btn-primary btn-sm" onclick="toggleDashboardEditMode()">Terminer</button></div></aside>';
 }
 
 function renderDashboardBoard(state) {
@@ -832,7 +860,7 @@ renderDashboard = async function() {
   _dashFocusZone = null;
   var state = getDashboardState();
   var editMode = getDashboardEditMode();
-  el.innerHTML = '<div class="dash4" data-editing="' + (editMode ? 'true' : 'false') + '"><div class="dash4-shell"><section class="dash4-toolbar"><div class="dash4-toolbar-copy"><strong>Workspace dashboard</strong><span>' + (editMode ? 'Mode edition actif: glisse, redimensionne et masque les widgets a ta guise.' : 'Reorganisable, masquable et coherent en light comme en dark.') + '</span></div><div class="dash4-toolbar-actions"><button class="btn ' + (editMode ? 'btn-primary' : 'btn-secondary') + '" onclick="toggleDashboardEditMode()">' + (editMode ? 'Edition active' : 'Mode edition') + '</button><button class="btn btn-secondary" onclick="toggleDashboardCustomizer()">Personnaliser</button><button class="btn btn-ghost" onclick="nav(\'faq\')">Aide</button></div></section>' + renderDashboardCustomizer(state) + '<section id="dash-board" class="dash4-board">' + renderDashboardBoard(state) + '</section></div></div>';
+  el.innerHTML = '<div class="dash4" data-editing="' + (editMode ? 'true' : 'false') + '"><div class="dash4-shell"><section class="dash4-toolbar"><div class="dash4-toolbar-copy"><strong>Workspace dashboard</strong><span>' + (editMode ? 'Mode edition actif: glisse, redimensionne et masque les widgets a ta guise.' : 'Reorganisable, masquable et coherent en light comme en dark.') + '</span></div><div class="dash4-toolbar-actions"><button class="btn ' + (editMode ? 'btn-primary' : 'btn-secondary') + '" onclick="toggleDashboardEditMode()">' + (editMode ? 'Edition active' : 'Mode edition') + '</button><button class="btn btn-secondary" onclick="toggleDashboardCustomizer()">Personnaliser</button><button class="btn btn-ghost" onclick="nav(\'faq\')">Aide</button></div></section>' + renderDashboardEditDock() + renderDashboardCustomizer(state) + '<section id="dash-board" class="dash4-board">' + renderDashboardBoard(state) + '</section></div></div>';
   initDashboardWidgetRail();
   initDashboardResizeBinding();
   loadDashboardWidgets();
