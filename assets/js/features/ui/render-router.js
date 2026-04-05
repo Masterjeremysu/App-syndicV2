@@ -14,7 +14,6 @@ function renderPage(p) {
     currentPage = p;
   }
 
-  el.classList.toggle('page-dashboard-exec', p === 'dashboard');
   el.style.animation = 'none';
   el.offsetHeight;
   el.style.animation = 'pageIn .22s cubic-bezier(.4,0,.2,1) both';
