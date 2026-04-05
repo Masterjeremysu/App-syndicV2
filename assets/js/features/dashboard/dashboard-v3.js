@@ -486,7 +486,7 @@ function renderDashChart() {
 }
 
 const DASH_WIDGET_VISIBILITY_KEY = 'coprosync_dash_widget_visibility_v5';
-const DASH_WIDGET_SIZE_KEY = 'coprosync_dash_widget_sizes_v5';
+const DASH_WIDGET_SIZE_KEY = 'coprosync_dash_widget_sizes_v6';
 const DASH_EDIT_MODE_KEY = 'coprosync_dash_edit_mode_v1';
 
 function getDashboardEditMode() {
@@ -513,17 +513,17 @@ function resetDashboardLayout() {
 
 function applyDashboardSmartLayout() {
   var state = getDashboardState();
-  var order = ['hero', 'priorities', 'alerts', 'metrics', 'pulse', 'care', 'tickets', 'zones'];
+  var order = ['hero', 'priorities', 'alerts', 'pulse', 'care', 'metrics', 'tickets', 'zones'];
   if (isManager()) order.push('contrats');
   order = order.concat(['activity', 'events', 'annonces', 'documents', 'votes', 'install']);
   saveDashboardWidgetOrder(order);
   setDashboardWidgetSizes({
     hero: 'standard',
     priorities: 'compact',
-    alerts: 'standard',
+    alerts: 'compact',
     pulse: 'compact',
     care: 'compact',
-    metrics: 'standard',
+    metrics: 'compact',
     tickets: 'standard',
     zones: 'compact',
     contrats: 'compact',
@@ -552,6 +552,10 @@ function setDashboardWidgetSizes(sizes) {
 function getDashboardCardSize(config) {
   var sizes = getDashboardWidgetSizes();
   return sizes[config.key] || config.defaultSize || 'standard';
+}
+
+function getDashboardSizeLabel(size) {
+  return size === 'hero' ? 'L' : (size === 'standard' ? 'M' : 'S');
 }
 
 function getDashboardCardSpan(config) {
@@ -590,21 +594,21 @@ function nudgeDashboardWidget(key, direction) {
 
 function getDashboardWidgetCatalog(state) {
   return [
-    { key: 'hero', title: 'Pilotage', subtitle: 'Entree de tableau de bord', hideable: false, defaultSize: 'standard', spans: { compact: 6, standard: 7, hero: 12 }, render: function() { return renderDashboardHeroCard(state); } },
-    { key: 'priorities', title: 'Actions prioritaires', subtitle: 'Urgences et arbitrages', hideable: true, defaultSize: 'compact', spans: { compact: 5, standard: 5, hero: 6 }, render: function() { return renderDashboardPrioritiesCard(state); } },
-    { key: 'alerts', title: 'Centre d alertes', subtitle: 'Ce qui peut deraper vite', hideable: true, defaultSize: 'standard', spans: { compact: 7, standard: 7, hero: 8 }, render: function() { return renderDashboardAlertsCard(state); } },
-    { key: 'pulse', title: 'Pulse copro', subtitle: 'Suivi quotidien ultra rapide', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardPulseCard(state); } },
-    { key: 'care', title: 'Sante residence', subtitle: 'Niveau de tension de la copropriete', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardCareCard(state); } },
-    { key: 'metrics', title: 'Chiffres clefs', subtitle: 'Synthese instantanee', hideable: true, defaultSize: 'standard', spans: { compact: 6, standard: 12, hero: 12 }, render: function() { return renderDashboardMetricsCard(state); } },
-    { key: 'tickets', title: 'File de traitement', subtitle: 'Tickets a lire maintenant', hideable: true, defaultSize: 'standard', spans: { compact: 7, standard: 7, hero: 12 }, render: function() { return renderDashboardTicketsCard(state); } },
-    { key: 'zones', title: 'Zones sous tension', subtitle: 'Focus batiment et zone', hideable: true, defaultSize: 'compact', spans: { compact: 5, standard: 5, hero: 8 }, render: function() { return renderDashboardZonesCard(state); } },
-    ...(isManager() ? [{ key: 'contrats', title: 'Contrats fournisseurs', subtitle: 'Echeances et budget', hideable: true, defaultSize: 'compact', spans: { compact: 5, standard: 5, hero: 8 }, render: function() { return renderDashboardContratsCard(state); } }] : []),
-    { key: 'activity', title: 'Activite sur 6 mois', subtitle: 'Crees vs resolus', hideable: true, defaultSize: 'compact', spans: { compact: 7, standard: 7, hero: 8 }, render: function() { return renderDashboardActivityCard(state); } },
-    { key: 'events', title: 'Prochains evenements', subtitle: 'Agenda residence', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardEventsCard(); } },
-    { key: 'annonces', title: 'Annonces', subtitle: 'Messages prioritaires', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardAnnoncesCard(); } },
-    { key: 'documents', title: 'Documents recents', subtitle: 'Acces rapide', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardDocumentsCard(state); } },
-    { key: 'votes', title: 'Votes en cours', subtitle: 'Participation et decisions', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardVotesCard(state); } },
-    { key: 'install', title: 'Installer l application', subtitle: 'Optimisee mobile', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardInstallCard(); } }
+    { key: 'hero', title: 'Pilotage', subtitle: 'Entree de tableau de bord', hideable: false, defaultSize: 'standard', spans: { compact: 7, standard: 8, hero: 12 }, render: function() { return renderDashboardHeroCard(state); } },
+    { key: 'priorities', title: 'Actions prioritaires', subtitle: 'Urgences et arbitrages', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 4 }, render: function() { return renderDashboardPrioritiesCard(state); } },
+    { key: 'alerts', title: 'Centre d alertes', subtitle: 'Ce qui peut deraper vite', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 4 }, render: function() { return renderDashboardAlertsCard(state); } },
+    { key: 'pulse', title: 'Pulse copro', subtitle: 'Suivi quotidien ultra rapide', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 4 }, render: function() { return renderDashboardPulseCard(state); } },
+    { key: 'care', title: 'Sante residence', subtitle: 'Niveau de tension de la copropriete', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 4 }, render: function() { return renderDashboardCareCard(state); } },
+    { key: 'metrics', title: 'Chiffres clefs', subtitle: 'Synthese instantanee', hideable: true, defaultSize: 'compact', spans: { compact: 8, standard: 8, hero: 8 }, render: function() { return renderDashboardMetricsCard(state); } },
+    { key: 'tickets', title: 'File de traitement', subtitle: 'Tickets a lire maintenant', hideable: true, defaultSize: 'standard', spans: { compact: 8, standard: 8, hero: 12 }, render: function() { return renderDashboardTicketsCard(state); } },
+    { key: 'zones', title: 'Zones sous tension', subtitle: 'Focus batiment et zone', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 4 }, render: function() { return renderDashboardZonesCard(state); } },
+    ...(isManager() ? [{ key: 'contrats', title: 'Contrats fournisseurs', subtitle: 'Echeances et budget', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 4 }, render: function() { return renderDashboardContratsCard(state); } }] : []),
+    { key: 'activity', title: 'Activite sur 6 mois', subtitle: 'Crees vs resolus', hideable: true, defaultSize: 'compact', spans: { compact: 8, standard: 8, hero: 8 }, render: function() { return renderDashboardActivityCard(state); } },
+    { key: 'events', title: 'Prochains evenements', subtitle: 'Agenda residence', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 4 }, render: function() { return renderDashboardEventsCard(); } },
+    { key: 'annonces', title: 'Annonces', subtitle: 'Messages prioritaires', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 4 }, render: function() { return renderDashboardAnnoncesCard(); } },
+    { key: 'documents', title: 'Documents recents', subtitle: 'Acces rapide', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 4 }, render: function() { return renderDashboardDocumentsCard(state); } },
+    { key: 'votes', title: 'Votes en cours', subtitle: 'Participation et decisions', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 4 }, render: function() { return renderDashboardVotesCard(state); } },
+    { key: 'install', title: 'Installer l application', subtitle: 'Optimisee mobile', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 4 }, render: function() { return renderDashboardInstallCard(); } }
   ];
 }
 
@@ -656,7 +660,7 @@ function buildDashboardCardShell(config, body, actionHTML) {
   var size = getDashboardCardSize(config);
   var moveTools = isEdit ? '<button class="dash4-icon-btn dash4-move-btn" type="button" onclick="nudgeDashboardWidget(\'' + config.key + '\', -1)" title="Monter">↑</button><button class="dash4-icon-btn dash4-move-btn" type="button" onclick="nudgeDashboardWidget(\'' + config.key + '\', 1)" title="Descendre">↓</button>' : '';
   return ''
-    + '<article class="dash4-card" draggable="false" data-widget-key="' + config.key + '" data-span="' + getDashboardCardSpan(config) + '" data-size="' + size + '" data-editing="' + (isEdit ? 'true' : 'false') + '">'
+    + '<article class="dash4-card dash4-card-window" draggable="false" data-widget-key="' + config.key + '" data-span="' + getDashboardCardSpan(config) + '" data-size="' + size + '" data-editing="' + (isEdit ? 'true' : 'false') + '">'
     + '<div class="dash4-card-head">'
     + '<div><h3>' + escHtml(config.title) + '</h3><p>' + escHtml(config.subtitle) + '</p></div>'
     + '<div class="dash4-card-tools">' + (actionHTML || '') + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'' + config.key + '\')" title="Taille">' + size.charAt(0).toUpperCase() + '</button>' : '') + moveTools + '</div>'
@@ -830,7 +834,7 @@ buildDashboardCardShell = function(config, body, actionHTML) {
   var size = getDashboardCardSize(config);
   var editTools = isEdit
     ? '<div class="dash4-card-edit-tools">'
-      + '<button class="dash4-control-btn is-size" type="button" onclick="cycleDashboardWidgetSize(\'' + config.key + '\')" title="Changer la taille"><span>Taille</span><strong>' + size.charAt(0).toUpperCase() + '</strong></button>'
+      + '<button class="dash4-control-btn is-size" type="button" onclick="cycleDashboardWidgetSize(\'' + config.key + '\')" title="Changer la taille"><span>Taille</span><strong>' + getDashboardSizeLabel(size) + '</strong></button>'
       + '<button class="dash4-control-btn" type="button" onclick="nudgeDashboardWidget(\'' + config.key + '\', -1)" title="Monter"><span>Monter</span><strong>↑</strong></button>'
       + '<button class="dash4-control-btn" type="button" onclick="nudgeDashboardWidget(\'' + config.key + '\', 1)" title="Descendre"><span>Desc.</span><strong>↓</strong></button>'
       + '</div>'
@@ -838,7 +842,7 @@ buildDashboardCardShell = function(config, body, actionHTML) {
   return ''
     + '<article class="dash4-card" draggable="false" data-widget-key="' + config.key + '" data-span="' + getDashboardCardSpan(config) + '" data-size="' + size + '" data-editing="' + (isEdit ? 'true' : 'false') + '">'
     + '<div class="dash4-card-head">'
-    + '<div><h3>' + escHtml(config.title) + '</h3><p>' + escHtml(config.subtitle) + '</p></div>'
+    + '<div><div class="dash4-card-kicker">Module</div><h3>' + escHtml(config.title) + '</h3><p>' + escHtml(config.subtitle) + '</p></div>'
     + '<div class="dash4-card-tools">' + (actionHTML || '') + editTools + '</div>'
     + '</div>'
     + '<div class="dash4-card-body">' + body + '</div>'
@@ -850,7 +854,7 @@ renderDashboardHeroCard = function(state) {
   var heroConfig = { key: 'hero', title: 'Pilotage residence', subtitle: 'Vue generale premium, orientee action et mobile.', spans: { compact: 6, standard: 7, hero: 12 }, defaultSize: 'standard' };
   var moveTools = isEdit
     ? '<div class="dash4-card-edit-tools">'
-      + '<button class="dash4-control-btn is-size" type="button" onclick="cycleDashboardWidgetSize(\'hero\')" title="Changer la taille"><span>Taille</span><strong>' + getDashboardCardSize(heroConfig).charAt(0).toUpperCase() + '</strong></button>'
+      + '<button class="dash4-control-btn is-size" type="button" onclick="cycleDashboardWidgetSize(\'hero\')" title="Changer la taille"><span>Taille</span><strong>' + getDashboardSizeLabel(getDashboardCardSize(heroConfig)) + '</strong></button>'
       + '<button class="dash4-control-btn" type="button" onclick="nudgeDashboardWidget(\'hero\', -1)" title="Monter"><span>Monter</span><strong>↑</strong></button>'
       + '<button class="dash4-control-btn" type="button" onclick="nudgeDashboardWidget(\'hero\', 1)" title="Descendre"><span>Desc.</span><strong>↓</strong></button>'
       + '</div>'
@@ -861,7 +865,7 @@ renderDashboardHeroCard = function(state) {
     + '<div><div class="dash4-hero-title">Bonjour ' + escHtml(getDashboardGreeting()) + ', pilotons la residence.</div><div class="dash4-hero-sub">' + escHtml(getDashboardSummaryText(state)) + '</div><div class="dash4-action-row"><button class="btn btn-primary" onclick="openNewTicket()">Nouveau signalement</button><button class="btn btn-secondary" onclick="nav(\'tickets\')">Tous les signalements</button><button class="btn btn-ghost" onclick="toggleDashboardCustomizer()">Modules</button></div></div>'
     + '<div class="dash4-highlight"><span>Focus du jour</span><strong>' + state.ouverts.length + '</strong><p>tickets actifs a suivre, dont ' + state.critiques.length + ' critiques et ' + state.resolus.length + ' deja resolus.</p></div>'
     + '</div>';
-  return '<article class="dash4-card dash4-board-hero" draggable="false" data-widget-key="hero" data-span="' + getDashboardCardSpan(heroConfig) + '" data-size="' + getDashboardCardSize(heroConfig) + '" data-editing="' + (isEdit ? 'true' : 'false') + '"><div class="dash4-card-head"><div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-head-link" type="button" onclick="toggleDashboardCustomizer()">Configurer</button>' + moveTools + '</div></div><div class="dash4-card-body">' + body + '</div></article>';
+  return '<article class="dash4-card dash4-card-window dash4-board-hero" draggable="false" data-widget-key="hero" data-span="' + getDashboardCardSpan(heroConfig) + '" data-size="' + getDashboardCardSize(heroConfig) + '" data-editing="' + (isEdit ? 'true' : 'false') + '"><div class="dash4-card-head"><div><div class="dash4-card-kicker">Overview</div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-head-link" type="button" onclick="toggleDashboardCustomizer()">Configurer</button>' + moveTools + '</div></div><div class="dash4-card-body">' + body + '</div></article>';
 };
 
 renderDashboardCustomizer = function(state) {
@@ -869,7 +873,7 @@ renderDashboardCustomizer = function(state) {
   var toggles = getDashboardWidgetCatalog(state).filter(function(item) { return item.hideable; }).map(function(item) {
     var hidden = !!visibility[item.key];
     var size = getDashboardCardSize(item);
-    return '<div class="dash4-toggle ' + (hidden ? 'is-hidden' : '') + '"><button class="dash4-toggle-main" onclick="toggleDashboardWidgetVisibility(\'' + item.key + '\')"><span class="dash4-toggle-text"><strong>' + escHtml(item.title) + '</strong><span>' + escHtml(item.subtitle) + '</span></span><span class="dash4-toggle-indicator"></span></button><div class="dash4-toggle-actions">' + (item.spans ? '<button class="dash4-size-chip" onclick="cycleDashboardWidgetSize(\'' + item.key + '\')">' + escHtml(size) + '</button>' : '') + '<button class="dash4-mini-btn" type="button" onclick="nudgeDashboardWidget(\'' + item.key + '\', -1)" title="Monter">↑</button><button class="dash4-mini-btn" type="button" onclick="nudgeDashboardWidget(\'' + item.key + '\', 1)" title="Descendre">↓</button></div></div>';
+    return '<div class="dash4-toggle ' + (hidden ? 'is-hidden' : '') + '"><button class="dash4-toggle-main" onclick="toggleDashboardWidgetVisibility(\'' + item.key + '\')"><span class="dash4-toggle-text"><strong>' + escHtml(item.title) + '</strong><span>' + escHtml(item.subtitle) + '</span></span><span class="dash4-toggle-indicator"></span></button><div class="dash4-toggle-actions">' + (item.spans ? '<button class="dash4-size-chip" onclick="cycleDashboardWidgetSize(\'' + item.key + '\')">' + escHtml(getDashboardSizeLabel(size)) + '</button>' : '') + '<button class="dash4-mini-btn" type="button" onclick="nudgeDashboardWidget(\'' + item.key + '\', -1)" title="Monter">↑</button><button class="dash4-mini-btn" type="button" onclick="nudgeDashboardWidget(\'' + item.key + '\', 1)" title="Descendre">↓</button></div></div>';
   }).join('');
   return '<section id="dash-customize-panel" class="dash4-customize" aria-hidden="' + (_dashCustomizerOpen ? 'false' : 'true') + '"><div class="dash4-customize-head"><div><div class="dash4-customize-kicker">Modules</div><h2>Composer votre cockpit</h2><p>Affiche, masque, compacte et replace les modules sans casser la lecture executive du dashboard.</p></div><div class="dash4-customize-actions"><button class="dash4-toolbar-btn" type="button" onclick="applyDashboardSmartLayout()">Auto organiser</button><button class="dash4-toolbar-btn ' + (getDashboardEditMode() ? 'is-active' : '') + '" type="button" onclick="toggleDashboardEditMode()">' + (getDashboardEditMode() ? 'Edition active' : 'Mode edition') + '</button><button class="dash4-toolbar-btn is-ghost" type="button" onclick="toggleDashboardCustomizer()">Fermer</button></div></div><div class="dash4-toggle-grid">' + toggles + '</div></section>';
 };
