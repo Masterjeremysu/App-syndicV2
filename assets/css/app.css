@@ -1514,6 +1514,9 @@ body {
   transform: translateY(0);
   pointer-events: auto;
 }
+.dash4-move-btn {
+  display: none;
+}
 .dash4[data-editing="false"] .dash4-icon-btn {
   opacity: 1;
   pointer-events: auto;
@@ -2020,6 +2023,12 @@ body {
   .dash4-alert-ribbon {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .dash4-move-btn {
+    display: inline-flex;
+  }
+  .dash4-handle {
+    display: none;
   }
 }
 

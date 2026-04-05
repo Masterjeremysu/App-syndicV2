@@ -527,6 +527,21 @@ function cycleDashboardWidgetSize(key) {
   renderDashboard();
 }
 
+function nudgeDashboardWidget(key, direction) {
+  var board = $('dash-board');
+  if (!board) return;
+  var cards = Array.from(board.querySelectorAll('[data-widget-key]'));
+  var index = cards.findIndex(function(card) { return card.getAttribute('data-widget-key') === key; });
+  if (index < 0) return;
+  var target = index + direction;
+  if (target < 0 || target >= cards.length) return;
+  var current = cards[index];
+  var pivot = cards[target];
+  if (direction > 0) board.insertBefore(pivot, current);
+  else board.insertBefore(current, pivot);
+  saveDashboardWidgetOrderFromDOM();
+}
+
 function getDashboardWidgetCatalog(state) {
   return [
     { key: 'hero', title: 'Pilotage', subtitle: 'Entree de tableau de bord', hideable: false, defaultSize: 'hero', spans: { standard: 8, hero: 12 }, render: function() { return renderDashboardHeroCard(state); } },
@@ -587,11 +602,12 @@ function toggleDashboardWidgetVisibility(key) {
 function buildDashboardCardShell(config, body, actionHTML) {
   var isEdit = getDashboardEditMode();
   var size = getDashboardCardSize(config);
+  var moveTools = isEdit ? '<button class="dash4-icon-btn dash4-move-btn" type="button" onclick="nudgeDashboardWidget(\'' + config.key + '\', -1)" title="Monter">↑</button><button class="dash4-icon-btn dash4-move-btn" type="button" onclick="nudgeDashboardWidget(\'' + config.key + '\', 1)" title="Descendre">↓</button>' : '';
   return ''
     + '<article class="dash4-card" draggable="' + (isEdit ? 'true' : 'false') + '" data-widget-key="' + config.key + '" data-span="' + getDashboardCardSpan(config) + '" data-size="' + size + '" data-editing="' + (isEdit ? 'true' : 'false') + '">'
     + '<div class="dash4-card-head">'
     + '<div><h3>' + escHtml(config.title) + '</h3><p>' + escHtml(config.subtitle) + '</p></div>'
-    + '<div class="dash4-card-tools">' + (actionHTML || '') + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'' + config.key + '\')" title="Taille">' + size.charAt(0).toUpperCase() + '</button>' : '') + '<button class="dash4-handle" type="button" title="Deplacer">::</button></div>'
+    + '<div class="dash4-card-tools">' + (actionHTML || '') + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'' + config.key + '\')" title="Taille">' + size.charAt(0).toUpperCase() + '</button>' : '') + moveTools + '<button class="dash4-handle" type="button" title="Deplacer">::</button></div>'
     + '</div>'
     + '<div class="dash4-card-body">' + body + '</div>'
     + '</article>';
@@ -600,13 +616,14 @@ function buildDashboardCardShell(config, body, actionHTML) {
 function renderDashboardHeroCard(state) {
   var isEdit = getDashboardEditMode();
   var heroConfig = { key: 'hero', title: 'Pilotage residence', subtitle: 'Vue generale premium, orientee action et mobile.', spans: { standard: 8, hero: 12 }, defaultSize: 'hero' };
+  var moveTools = isEdit ? '<button class="dash4-icon-btn dash4-move-btn" type="button" onclick="nudgeDashboardWidget(\'hero\', -1)" title="Monter">↑</button><button class="dash4-icon-btn dash4-move-btn" type="button" onclick="nudgeDashboardWidget(\'hero\', 1)" title="Descendre">↓</button>' : '';
   var body = ''
     + '<div class="dash4-date">' + new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '</div>'
     + '<div class="dash4-hero-grid">'
     + '<div><div class="dash4-hero-title">Bonjour ' + escHtml(getDashboardGreeting()) + ', pilotons la residence.</div><div class="dash4-hero-sub">' + escHtml(getDashboardSummaryText(state)) + '</div><div class="dash4-action-row"><button class="btn btn-primary" onclick="openNewTicket()">Nouveau signalement</button><button class="btn btn-secondary" onclick="nav(\'tickets\')">Tous les signalements</button><button class="btn btn-ghost" onclick="toggleDashboardCustomizer()">Personnaliser</button></div></div>'
     + '<div class="dash4-highlight"><span>Focus du jour</span><strong>' + state.ouverts.length + '</strong><p>tickets actifs a suivre, dont ' + state.critiques.length + ' critiques et ' + state.resolus.length + ' deja resolus.</p></div>'
     + '</div>';
-  return '<article class="dash4-card dash4-board-hero" draggable="' + (isEdit ? 'true' : 'false') + '" data-widget-key="hero" data-span="' + getDashboardCardSpan(heroConfig) + '" data-size="' + getDashboardCardSize(heroConfig) + '" data-editing="' + (isEdit ? 'true' : 'false') + '"><div class="dash4-card-head"><div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-icon-btn" type="button" onclick="toggleDashboardCustomizer()" title="Personnaliser">+</button>' + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'hero\')" title="Taille">H</button>' : '') + '<button class="dash4-handle" type="button" title="Deplacer">::</button></div></div><div class="dash4-card-body">' + body + '</div></article>';
+  return '<article class="dash4-card dash4-board-hero" draggable="' + (isEdit ? 'true' : 'false') + '" data-widget-key="hero" data-span="' + getDashboardCardSpan(heroConfig) + '" data-size="' + getDashboardCardSize(heroConfig) + '" data-editing="' + (isEdit ? 'true' : 'false') + '"><div class="dash4-card-head"><div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-icon-btn" type="button" onclick="toggleDashboardCustomizer()" title="Personnaliser">+</button>' + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'hero\')" title="Taille">H</button>' : '') + moveTools + '<button class="dash4-handle" type="button" title="Deplacer">::</button></div></div><div class="dash4-card-body">' + body + '</div></article>';
 }
 
 function renderDashboardPrioritiesCard(state) {
