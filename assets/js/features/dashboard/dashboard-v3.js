@@ -2,7 +2,7 @@ let _dashWidgetDragKey = null;
 let _dashPointerDrag = null;
 let _dashSortable = null;
 let _dashResizeBound = false;
-const DASH_WIDGET_ORDER_KEY = 'coprosync_dash_widget_order_v3';
+const DASH_WIDGET_ORDER_KEY = 'coprosync_dash_widget_order_v4';
 
 function isResolvedStatut(statut) {
   var value = String(statut || '').toLowerCase();
@@ -484,8 +484,8 @@ function renderDashChart() {
   }
 }
 
-const DASH_WIDGET_VISIBILITY_KEY = 'coprosync_dash_widget_visibility_v4';
-const DASH_WIDGET_SIZE_KEY = 'coprosync_dash_widget_sizes_v4';
+const DASH_WIDGET_VISIBILITY_KEY = 'coprosync_dash_widget_visibility_v5';
+const DASH_WIDGET_SIZE_KEY = 'coprosync_dash_widget_sizes_v5';
 const DASH_EDIT_MODE_KEY = 'coprosync_dash_edit_mode_v1';
 
 function getDashboardEditMode() {
@@ -512,25 +512,25 @@ function resetDashboardLayout() {
 
 function applyDashboardSmartLayout() {
   var state = getDashboardState();
-  var order = ['hero', 'priorities', 'alerts', 'pulse', 'care', 'metrics', 'tickets', 'zones'];
+  var order = ['hero', 'priorities', 'alerts', 'metrics', 'pulse', 'care', 'tickets', 'zones'];
   if (isManager()) order.push('contrats');
   order = order.concat(['activity', 'events', 'annonces', 'documents', 'votes', 'install']);
   saveDashboardWidgetOrder(order);
   setDashboardWidgetSizes({
-    hero: 'hero',
-    priorities: 'standard',
+    hero: 'standard',
+    priorities: 'compact',
     alerts: 'standard',
     pulse: 'compact',
     care: 'compact',
     metrics: 'standard',
-    tickets: 'hero',
-    zones: 'standard',
-    contrats: 'standard',
-    activity: 'standard',
-    events: 'standard',
-    annonces: 'standard',
-    documents: 'standard',
-    votes: 'standard',
+    tickets: 'standard',
+    zones: 'compact',
+    contrats: 'compact',
+    activity: 'compact',
+    events: 'compact',
+    annonces: 'compact',
+    documents: 'compact',
+    votes: 'compact',
     install: 'compact'
   });
   setDashboardVisibility({
@@ -589,21 +589,21 @@ function nudgeDashboardWidget(key, direction) {
 
 function getDashboardWidgetCatalog(state) {
   return [
-    { key: 'hero', title: 'Pilotage', subtitle: 'Entree de tableau de bord', hideable: false, defaultSize: 'hero', spans: { standard: 8, hero: 12 }, render: function() { return renderDashboardHeroCard(state); } },
-    { key: 'priorities', title: 'Actions prioritaires', subtitle: 'Urgences et arbitrages', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardPrioritiesCard(state); } },
-    { key: 'alerts', title: 'Centre d alertes', subtitle: 'Ce qui peut deraper vite', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 5, hero: 8 }, render: function() { return renderDashboardAlertsCard(state); } },
+    { key: 'hero', title: 'Pilotage', subtitle: 'Entree de tableau de bord', hideable: false, defaultSize: 'standard', spans: { compact: 6, standard: 7, hero: 12 }, render: function() { return renderDashboardHeroCard(state); } },
+    { key: 'priorities', title: 'Actions prioritaires', subtitle: 'Urgences et arbitrages', hideable: true, defaultSize: 'compact', spans: { compact: 5, standard: 5, hero: 6 }, render: function() { return renderDashboardPrioritiesCard(state); } },
+    { key: 'alerts', title: 'Centre d alertes', subtitle: 'Ce qui peut deraper vite', hideable: true, defaultSize: 'standard', spans: { compact: 7, standard: 7, hero: 8 }, render: function() { return renderDashboardAlertsCard(state); } },
     { key: 'pulse', title: 'Pulse copro', subtitle: 'Suivi quotidien ultra rapide', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardPulseCard(state); } },
     { key: 'care', title: 'Sante residence', subtitle: 'Niveau de tension de la copropriete', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardCareCard(state); } },
     { key: 'metrics', title: 'Chiffres clefs', subtitle: 'Synthese instantanee', hideable: true, defaultSize: 'standard', spans: { compact: 6, standard: 12, hero: 12 }, render: function() { return renderDashboardMetricsCard(state); } },
-    { key: 'tickets', title: 'File de traitement', subtitle: 'Tickets a lire maintenant', hideable: true, defaultSize: 'hero', spans: { compact: 5, standard: 7, hero: 12 }, render: function() { return renderDashboardTicketsCard(state); } },
-    { key: 'zones', title: 'Zones sous tension', subtitle: 'Focus batiment et zone', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 5, hero: 8 }, render: function() { return renderDashboardZonesCard(state); } },
-    ...(isManager() ? [{ key: 'contrats', title: 'Contrats fournisseurs', subtitle: 'Echeances et budget', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 5, hero: 8 }, render: function() { return renderDashboardContratsCard(state); } }] : []),
-    { key: 'activity', title: 'Activite sur 6 mois', subtitle: 'Crees vs resolus', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 7, hero: 8 }, render: function() { return renderDashboardActivityCard(state); } },
-    { key: 'events', title: 'Prochains evenements', subtitle: 'Agenda residence', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 6, hero: 8 }, render: function() { return renderDashboardEventsCard(); } },
-    { key: 'annonces', title: 'Annonces', subtitle: 'Messages prioritaires', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 6, hero: 8 }, render: function() { return renderDashboardAnnoncesCard(); } },
-    { key: 'documents', title: 'Documents recents', subtitle: 'Acces rapide', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 6, hero: 8 }, render: function() { return renderDashboardDocumentsCard(state); } },
-    { key: 'votes', title: 'Votes en cours', subtitle: 'Participation et decisions', hideable: true, defaultSize: 'standard', spans: { compact: 4, standard: 6, hero: 8 }, render: function() { return renderDashboardVotesCard(state); } },
-    { key: 'install', title: 'Installer l application', subtitle: 'Optimisee mobile', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 6, hero: 8 }, render: function() { return renderDashboardInstallCard(); } }
+    { key: 'tickets', title: 'File de traitement', subtitle: 'Tickets a lire maintenant', hideable: true, defaultSize: 'standard', spans: { compact: 7, standard: 7, hero: 12 }, render: function() { return renderDashboardTicketsCard(state); } },
+    { key: 'zones', title: 'Zones sous tension', subtitle: 'Focus batiment et zone', hideable: true, defaultSize: 'compact', spans: { compact: 5, standard: 5, hero: 8 }, render: function() { return renderDashboardZonesCard(state); } },
+    ...(isManager() ? [{ key: 'contrats', title: 'Contrats fournisseurs', subtitle: 'Echeances et budget', hideable: true, defaultSize: 'compact', spans: { compact: 5, standard: 5, hero: 8 }, render: function() { return renderDashboardContratsCard(state); } }] : []),
+    { key: 'activity', title: 'Activite sur 6 mois', subtitle: 'Crees vs resolus', hideable: true, defaultSize: 'compact', spans: { compact: 7, standard: 7, hero: 8 }, render: function() { return renderDashboardActivityCard(state); } },
+    { key: 'events', title: 'Prochains evenements', subtitle: 'Agenda residence', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardEventsCard(); } },
+    { key: 'annonces', title: 'Annonces', subtitle: 'Messages prioritaires', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardAnnoncesCard(); } },
+    { key: 'documents', title: 'Documents recents', subtitle: 'Acces rapide', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardDocumentsCard(state); } },
+    { key: 'votes', title: 'Votes en cours', subtitle: 'Participation et decisions', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardVotesCard(state); } },
+    { key: 'install', title: 'Installer l application', subtitle: 'Optimisee mobile', hideable: true, defaultSize: 'compact', spans: { compact: 4, standard: 4, hero: 6 }, render: function() { return renderDashboardInstallCard(); } }
   ];
 }
 
@@ -662,12 +662,12 @@ function buildDashboardCardShell(config, body, actionHTML) {
 
 function renderDashboardHeroCard(state) {
   var isEdit = getDashboardEditMode();
-  var heroConfig = { key: 'hero', title: 'Pilotage residence', subtitle: 'Vue generale premium, orientee action et mobile.', spans: { standard: 8, hero: 12 }, defaultSize: 'hero' };
+  var heroConfig = { key: 'hero', title: 'Pilotage residence', subtitle: 'Vue generale premium, orientee action et mobile.', spans: { compact: 6, standard: 7, hero: 12 }, defaultSize: 'standard' };
   var moveTools = isEdit ? '<button class="dash4-icon-btn dash4-move-btn" type="button" onclick="nudgeDashboardWidget(\'hero\', -1)" title="Monter">↑</button><button class="dash4-icon-btn dash4-move-btn" type="button" onclick="nudgeDashboardWidget(\'hero\', 1)" title="Descendre">↓</button>' : '';
   var body = ''
     + '<div class="dash4-date">' + new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '</div>'
     + '<div class="dash4-hero-grid">'
-    + '<div><div class="dash4-hero-title">Bonjour ' + escHtml(getDashboardGreeting()) + ', pilotons la residence.</div><div class="dash4-hero-sub">' + escHtml(getDashboardSummaryText(state)) + '</div><div class="dash4-action-row"><button class="btn btn-primary" onclick="openNewTicket()">Nouveau signalement</button><button class="btn btn-secondary" onclick="nav(\'tickets\')">Tous les signalements</button><button class="btn btn-ghost" onclick="toggleDashboardCustomizer()">Personnaliser</button></div></div>'
+    + '<div><div class="dash4-hero-title">Bonjour ' + escHtml(getDashboardGreeting()) + ', pilotons la residence.</div><div class="dash4-hero-sub">' + escHtml(getDashboardSummaryText(state)) + '</div><div class="dash4-action-row"><button class="btn btn-primary" onclick="openNewTicket()">Nouveau signalement</button><button class="btn btn-secondary" onclick="nav(\'tickets\')">Tous les signalements</button><button class="btn btn-ghost" onclick="toggleDashboardCustomizer()">Modules</button></div></div>'
     + '<div class="dash4-highlight"><span>Focus du jour</span><strong>' + state.ouverts.length + '</strong><p>tickets actifs a suivre, dont ' + state.critiques.length + ' critiques et ' + state.resolus.length + ' deja resolus.</p></div>'
     + '</div>';
   return '<article class="dash4-card dash4-board-hero" draggable="false" data-widget-key="hero" data-span="' + getDashboardCardSpan(heroConfig) + '" data-size="' + getDashboardCardSize(heroConfig) + '" data-editing="' + (isEdit ? 'true' : 'false') + '"><div class="dash4-card-head"><div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-icon-btn" type="button" onclick="toggleDashboardCustomizer()" title="Personnaliser">+</button>' + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'hero\')" title="Taille">H</button>' : '') + moveTools + '</div></div><div class="dash4-card-body">' + body + '</div></article>';
@@ -677,7 +677,7 @@ function renderDashboardPrioritiesCard(state) {
   var items = getDashboardPriorityCards(state).map(function(card) {
     return '<button class="dash4-priority" data-tone="' + card.tone + '" onclick="' + card.action + '"><span class="dash4-priority-badge">' + card.icon + '</span><span class="dash4-priority-copy"><strong>' + escHtml(card.title) + '</strong><span>' + escHtml(card.subtitle) + '</span></span><span class="dash4-priority-cta">' + escHtml(card.cta) + ' -></span></button>';
   }).join('');
-  return buildDashboardCardShell({ key: 'priorities', title: 'Actions prioritaires', subtitle: 'Ce qui demande une decision ou un suivi rapide.', span: 4 }, '<div class="dash4-priority-stack">' + items + '</div>', '');
+  return buildDashboardCardShell({ key: 'priorities', title: 'Actions prioritaires', subtitle: 'Ce qui demande une decision ou un suivi rapide.', span: 5 }, '<div class="dash4-priority-stack">' + items + '</div>', '');
 }
 
 function renderDashboardAlertsCard(state) {
@@ -698,7 +698,7 @@ function renderDashboardAlertsCard(state) {
     return '<button class="dash4-alert" data-tone="' + item.tone + '" onclick="' + item.action + '"><small>' + escHtml(item.label) + '</small><strong>' + item.value + '</strong><span>' + escHtml(item.note) + '</span></button>';
   }).join('') + '</div>';
   body += '<div class="dash4-alert-ribbon"><span>Raccourcis</span><div class="dash4-alert-actions"><button class="btn btn-ghost btn-sm" onclick="openNewTicket()">Nouveau ticket</button><button class="btn btn-ghost btn-sm" onclick="nav(\'agenda\')">Agenda</button><button class="btn btn-ghost btn-sm" onclick="nav(\'annonces\')">Annonces</button></div></div>';
-  return buildDashboardCardShell({ key: 'alerts', title: 'Centre d alertes', subtitle: 'Ce qui peut deraper vite, pour garder la residence sous controle.', span: 5 }, body, '<button class="btn btn-ghost btn-sm" type="button" onclick="toggleDashboardCustomizer()">Regler</button>');
+  return buildDashboardCardShell({ key: 'alerts', title: 'Centre d alertes', subtitle: 'Ce qui peut deraper vite, pour garder la residence sous controle.', span: 7 }, body, '<button class="btn btn-ghost btn-sm" type="button" onclick="toggleDashboardCustomizer()">Regler</button>');
 }
 
 function renderDashboardPulseCard(state) {
@@ -772,15 +772,15 @@ function renderDashboardContratsCard(state) {
 }
 
 function renderDashboardActivityCard() {
-  return buildDashboardCardShell({ key: 'activity', title: 'Activite sur 6 mois', subtitle: 'Crees versus resolus, avec le filtre courant applique.', span: 7 }, '<div class="dash3-chart-wrap"><canvas id="dash-chart" class="dash3-chart" height="130"></canvas><div id="dash-chart-tip" class="dash3-chart-tip" style="display:none;"></div></div>', '');
+  return buildDashboardCardShell({ key: 'activity', title: 'Activite sur 6 mois', subtitle: 'Crees versus resolus, avec le filtre courant applique.', span: 7 }, '<div class="dash3-chart-wrap"><canvas id="dash-chart" class="dash3-chart" height="116"></canvas><div id="dash-chart-tip" class="dash3-chart-tip" style="display:none;"></div></div>', '');
 }
 
 function renderDashboardEventsCard() {
-  return buildDashboardCardShell({ key: 'events', title: 'Prochains evenements', subtitle: 'Agenda a venir avec les rendez-vous a ne pas manquer.', span: 6 }, '<div id="dash-events-list" class="dash4-empty">Chargement des evenements...</div>', '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'agenda\')">Agenda</button>');
+  return buildDashboardCardShell({ key: 'events', title: 'Prochains evenements', subtitle: 'Agenda a venir avec les rendez-vous a ne pas manquer.', span: 4 }, '<div id="dash-events-list" class="dash4-empty">Chargement des evenements...</div>', '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'agenda\')">Agenda</button>');
 }
 
 function renderDashboardAnnoncesCard() {
-  return buildDashboardCardShell({ key: 'annonces', title: 'Annonces', subtitle: 'Messages prioritaires et informations utiles pour la residence.', span: 6 }, '<div id="dash-annonces-list" class="dash4-empty">Chargement des annonces...</div>', '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'annonces\')">Toutes</button>');
+  return buildDashboardCardShell({ key: 'annonces', title: 'Annonces', subtitle: 'Messages prioritaires et informations utiles pour la residence.', span: 4 }, '<div id="dash-annonces-list" class="dash4-empty">Chargement des annonces...</div>', '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'annonces\')">Toutes</button>');
 }
 
 function renderDashboardDocumentsCard(state) {
@@ -788,7 +788,7 @@ function renderDashboardDocumentsCard(state) {
     var isNew = typeof _docsVus !== 'undefined' ? !_docsVus.has(doc.id) : false;
     return '<div class="dash4-list-item" onclick="nav(\'documents\')"><span class="dash4-list-mark" style="background:' + (isNew ? 'var(--dash4-accent)' : 'var(--dash4-info)') + ';"></span><span class="dash4-list-copy"><strong>' + escHtml(doc.titre) + '</strong><span>' + escHtml(fmtD(doc.created_at)) + '</span></span><span class="dash4-list-meta">' + (isNew ? 'Nouveau' : 'Archive') + '</span></div>';
   }).join('') + '</div>';
-  return buildDashboardCardShell({ key: 'documents', title: 'Documents recents', subtitle: 'Pieces utiles a retrouver vite depuis le tableau de bord.', span: 6 }, body, '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'documents\')">Ouvrir</button>');
+  return buildDashboardCardShell({ key: 'documents', title: 'Documents recents', subtitle: 'Pieces utiles a retrouver vite depuis le tableau de bord.', span: 4 }, body, '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'documents\')">Ouvrir</button>');
 }
 
 function renderDashboardVotesCard(state) {
@@ -797,12 +797,12 @@ function renderDashboardVotesCard(state) {
     var voted = typeof _reponsesCache !== 'undefined' && _reponsesCache[v.id];
     return '<div class="dash4-list-item" onclick="nav(\'votes\')"><span class="dash4-list-mark" style="background:' + (voted ? 'var(--dash4-success)' : 'var(--dash4-warning)') + ';"></span><span class="dash4-list-copy"><strong>' + escHtml(v.titre) + '</strong><span>' + total + ' participant' + (total > 1 ? 's' : '') + '</span></span><span class="dash4-list-meta">' + (voted ? 'Vote' : 'A faire') + '</span></div>';
   }).join('') + '</div>';
-  return buildDashboardCardShell({ key: 'votes', title: 'Votes en cours', subtitle: 'Participation et decisions a suivre.', span: 6 }, body, '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'votes\')">Ouvrir</button>');
+  return buildDashboardCardShell({ key: 'votes', title: 'Votes en cours', subtitle: 'Participation et decisions a suivre.', span: 4 }, body, '<button class="btn btn-ghost btn-sm" type="button" onclick="nav(\'votes\')">Ouvrir</button>');
 }
 
 function renderDashboardInstallCard() {
   var body = '<div class="dash4-empty" style="text-align:left;"><strong style="display:block;color:var(--text);margin-bottom:8px;">Version mobile</strong>Installe l application pour un acces plein ecran, plus stable sur iPhone et Android.<div class="dash3-widget-note">iPhone: Safari -> Partager -> Sur l ecran d accueil. Android: Chrome -> menu -> Installer l application.</div></div>';
-  return buildDashboardCardShell({ key: 'install', title: 'Installer l application', subtitle: 'Pour un usage quotidien plus fluide sur mobile.', span: 6 }, body, '');
+  return buildDashboardCardShell({ key: 'install', title: 'Installer l application', subtitle: 'Pour un usage quotidien plus fluide sur mobile.', span: 4 }, body, '');
 }
 
 function renderDashboardCustomizer(state) {
