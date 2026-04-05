@@ -28,6 +28,8 @@ function getDashboardState() {
   var syndic = tickets.filter(function(t) { return t.statut === 'transmis_syndic'; });
   var resolus = tickets.filter(function(t) { return isResolvedStatut(t.statut); });
   var mine = tickets.filter(function(t) { return t.auteur_id === user.id; });
+  var latestTicket = tickets.slice().sort(function(a, b) { return new Date(b.created_at) - new Date(a.created_at); })[0] || null;
+  var daysWithoutTicket = latestTicket ? Math.max(0, Math.floor((Date.now() - new Date(latestTicket.created_at).getTime()) / 864e5)) : 0;
   var contrats = cache.contrats || [];
   var actifs = contrats.filter(function(c) { return c.actif !== false; });
   var contratsExpires = actifs.filter(function(c) { return daysUntil(c.date_echeance) < 0; });
@@ -46,6 +48,8 @@ function getDashboardState() {
     syndic: syndic,
     resolus: resolus,
     mine: mine,
+    latestTicket: latestTicket,
+    daysWithoutTicket: daysWithoutTicket,
     contrats: actifs,
     contratsExpires: contratsExpires,
     contratsAlertes: contratsAlertes,
@@ -620,7 +624,7 @@ function buildDashboardCardShell(config, body, actionHTML) {
     + '<article class="dash4-card" draggable="false" data-widget-key="' + config.key + '" data-span="' + getDashboardCardSpan(config) + '" data-size="' + size + '" data-editing="' + (isEdit ? 'true' : 'false') + '">'
     + '<div class="dash4-card-head">'
     + '<div><h3>' + escHtml(config.title) + '</h3><p>' + escHtml(config.subtitle) + '</p></div>'
-    + '<div class="dash4-card-tools">' + (actionHTML || '') + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'' + config.key + '\')" title="Taille">' + size.charAt(0).toUpperCase() + '</button>' : '') + moveTools + '<button class="dash4-handle" type="button" draggable="' + (isEdit ? 'true' : 'false') + '" title="Deplacer">::</button></div>'
+    + '<div class="dash4-card-tools">' + (actionHTML || '') + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'' + config.key + '\')" title="Taille">' + size.charAt(0).toUpperCase() + '</button>' : '') + moveTools + '<button class="dash4-handle" type="button" draggable="false" title="Deplacer">::</button></div>'
     + '</div>'
     + '<div class="dash4-card-body">' + body + '</div>'
     + '</article>';
@@ -636,7 +640,7 @@ function renderDashboardHeroCard(state) {
     + '<div><div class="dash4-hero-title">Bonjour ' + escHtml(getDashboardGreeting()) + ', pilotons la residence.</div><div class="dash4-hero-sub">' + escHtml(getDashboardSummaryText(state)) + '</div><div class="dash4-action-row"><button class="btn btn-primary" onclick="openNewTicket()">Nouveau signalement</button><button class="btn btn-secondary" onclick="nav(\'tickets\')">Tous les signalements</button><button class="btn btn-ghost" onclick="toggleDashboardCustomizer()">Personnaliser</button></div></div>'
     + '<div class="dash4-highlight"><span>Focus du jour</span><strong>' + state.ouverts.length + '</strong><p>tickets actifs a suivre, dont ' + state.critiques.length + ' critiques et ' + state.resolus.length + ' deja resolus.</p></div>'
     + '</div>';
-  return '<article class="dash4-card dash4-board-hero" draggable="false" data-widget-key="hero" data-span="' + getDashboardCardSpan(heroConfig) + '" data-size="' + getDashboardCardSize(heroConfig) + '" data-editing="' + (isEdit ? 'true' : 'false') + '"><div class="dash4-card-head"><div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-icon-btn" type="button" onclick="toggleDashboardCustomizer()" title="Personnaliser">+</button>' + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'hero\')" title="Taille">H</button>' : '') + moveTools + '<button class="dash4-handle" type="button" draggable="' + (isEdit ? 'true' : 'false') + '" title="Deplacer">::</button></div></div><div class="dash4-card-body">' + body + '</div></article>';
+  return '<article class="dash4-card dash4-board-hero" draggable="false" data-widget-key="hero" data-span="' + getDashboardCardSpan(heroConfig) + '" data-size="' + getDashboardCardSize(heroConfig) + '" data-editing="' + (isEdit ? 'true' : 'false') + '"><div class="dash4-card-head"><div><h2>Pilotage residence</h2><p>Vue generale premium, orientee action et mobile.</p></div><div class="dash4-card-tools"><button class="dash4-icon-btn" type="button" onclick="toggleDashboardCustomizer()" title="Personnaliser">+</button>' + (isEdit ? '<button class="dash4-icon-btn" type="button" onclick="cycleDashboardWidgetSize(\'hero\')" title="Taille">H</button>' : '') + moveTools + '<button class="dash4-handle" type="button" draggable="false" title="Deplacer">::</button></div></div><div class="dash4-card-body">' + body + '</div></article>';
 }
 
 function renderDashboardPrioritiesCard(state) {
@@ -700,12 +704,14 @@ function renderDashboardCareCard(state) {
 
 function renderDashboardMetricsCard(state) {
   var openOrMine = isManager() ? state.syndic.length : state.mine.length;
+  var streakLabel = state.latestTicket ? 'depuis le dernier signalement' : 'aucun ticket historique';
   var body = ''
     + '<div class="dash4-kpi-grid">'
     + '<button class="dash4-kpi" data-tone="warning" onclick="setDashFocus(\'ouvert\')"><small>Ouverts</small><strong>' + state.ouverts.length + '</strong><span>Signalements en cours</span></button>'
     + '<button class="dash4-kpi" data-tone="critical" onclick="setDashFocus(\'critique\')"><small>Critiques</small><strong>' + state.critiques.length + '</strong><span>Traitement immediat</span></button>'
     + '<button class="dash4-kpi" data-tone="info" onclick="' + (isManager() ? "setDashFocus('transmis')" : "setDashFocus('mine')") + '"><small>' + (isManager() ? 'Transmis' : 'Mes tickets') + '</small><strong>' + openOrMine + '</strong><span>' + (isManager() ? 'En attente syndic' : 'Crees par vous') + '</span></button>'
     + '<button class="dash4-kpi" data-tone="success" onclick="setDashFocus(\'resolu\')"><small>Resolus</small><strong>' + state.resolus.length + '</strong><span>Historique traite</span></button>'
+    + '<button class="dash4-kpi" data-tone="calm" onclick="nav(\'tickets\')"><small>Jours sans ticket</small><strong>' + state.daysWithoutTicket + '</strong><span>' + streakLabel + '</span></button>'
     + '</div>';
   return buildDashboardCardShell({ key: 'metrics', title: 'Vue rapide', subtitle: getDashboardFocusLabel(), span: 12 }, body, '');
 }
@@ -803,6 +809,9 @@ function initDashboardWidgetRail() {
   if (!board || board.__dashReady) return;
   board.__dashReady = true;
   if (window.Sortable && typeof window.Sortable.create === 'function') {
+    board.addEventListener('dragstart', function(e) {
+      if (e.target && e.target.closest && e.target.closest('.dash4-handle')) e.preventDefault();
+    });
     _dashSortable = window.Sortable.create(board, {
       draggable: '.dash4-card',
       handle: '.dash4-handle',
