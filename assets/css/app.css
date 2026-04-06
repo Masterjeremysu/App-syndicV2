@@ -3415,3 +3415,480 @@ tbody tr:hover td { background: var(--bg); }
   .feed-pin-btn .feed-pin-lbl { display: none; }
   .feed-board-section { margin: 0 8px 12px; }
 }
+/* ═══════════════════════════════════════════════════════════════
+   MESSAGING & FEED — MOBILE UX FIXES
+   À COLLER À LA FIN DE assets/css/app.css
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────
+   FIX 1 : Scroll fade indicator sur les chips
+   Indique visuellement qu'il y a plus à droite
+   ───────────────────────────────────────────── */
+.feed-categories-bar {
+  position: relative;
+}
+
+.feed-categories-bar::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 36px;
+  background: linear-gradient(to right, transparent, var(--surface) 85%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+[data-theme="dark"] .feed-categories-bar::after {
+  background: linear-gradient(to right, transparent, var(--bg) 85%);
+}
+
+/* Cacher le fade quand le scroll est au bout */
+.feed-cat-chips-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.feed-cat-chips-scroll::-webkit-scrollbar { display: none; }
+
+
+/* ─────────────────────────────────────────────
+   FIX 2 : Thread slide natif — translateX
+   Remplace le display:none brusque sur mobile
+   ───────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .feed-split {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .feed-thread-pane {
+    position: absolute !important;
+    inset: 0;
+    transform: translateX(105%);
+    transition: transform .28s cubic-bezier(.4, 0, .2, 1);
+    background: var(--surface);
+    z-index: 5;
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  #feed-split.thread-active .feed-thread-pane {
+    transform: translateX(0);
+  }
+
+  #feed-split.thread-active .feed-left-pane {
+    display: flex; /* reste visible mais derrière */
+  }
+
+  .feed-thread-back-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+}
+
+
+/* ─────────────────────────────────────────────
+   FIX 3 : Tab bar interne à la page Messages
+   Sur mobile, remplace la sidebar masquée
+   ───────────────────────────────────────────── */
+.msg-inner-tabs {
+  display: none; /* Masqué sur desktop */
+}
+
+@media (max-width: 768px) {
+  .msg-inner-tabs {
+    display: flex;
+    align-items: stretch;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    flex-shrink: 0;
+  }
+
+  .msg-inner-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 11px 6px 10px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--font-body);
+    color: var(--text-3);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .msg-inner-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .msg-inner-tab:active {
+    background: var(--surface-2);
+  }
+
+  .msg-inner-tab-ico {
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .msg-inner-tab-badge {
+    position: absolute;
+    top: 8px;
+    right: calc(50% - 22px);
+    background: var(--red);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    padding: 0 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--surface);
+  }
+
+  /* Sur mobile, afficher seulement la vue active */
+  .msg-sidebar { display: none !important; }
+  .msg-sidebar.msg-tab-active { display: flex !important; width: 100% !important; }
+  .msg-main.msg-tab-active { display: flex !important; }
+
+  /* Animation de transition entre onglets */
+  .msg-tab-panel {
+    animation: tabSlideIn .2s ease both;
+  }
+  @keyframes tabSlideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+}
+
+
+/* ─────────────────────────────────────────────
+   FIX 4 : Composer collapsé — barre compacte
+   ───────────────────────────────────────────── */
+.feed-compose-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.feed-compose-trigger {
+  flex: 1;
+  height: 38px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 19px;
+  padding: 0 14px;
+  font-size: 13.5px;
+  color: var(--text-3);
+  font-family: var(--font-body);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s, background .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.feed-compose-trigger:hover,
+.feed-compose-trigger:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  outline: none;
+}
+
+.feed-compose-trigger:active {
+  background: var(--accent-light);
+}
+
+/* Modale de composition */
+.feed-compose-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 1050;
+  display: flex;
+  align-items: flex-end;
+  padding: 0;
+  animation: fadeIn .2s ease;
+}
+
+@media (min-width: 640px) {
+  .feed-compose-modal-overlay {
+    align-items: center;
+    padding: 24px;
+  }
+}
+
+.feed-compose-modal {
+  background: var(--surface);
+  width: 100%;
+  max-width: 560px;
+  border-radius: 20px 20px 0 0;
+  max-height: 90dvh;
+  overflow-y: auto;
+  transform: translateY(0);
+  animation: slideUpModal .28s cubic-bezier(.34, 1.2, .64, 1);
+}
+
+@media (min-width: 640px) {
+  .feed-compose-modal {
+    border-radius: 20px;
+    animation: scaleInModal .22s cubic-bezier(.34, 1.2, .64, 1);
+  }
+}
+
+@keyframes slideUpModal {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes scaleInModal {
+  from { opacity: 0; transform: scale(.95) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Handle mobile */
+.feed-compose-modal::before {
+  content: '';
+  display: block;
+  width: 36px;
+  height: 4px;
+  background: var(--border-strong);
+  border-radius: 2px;
+  margin: 10px auto 0;
+}
+@media (min-width: 640px) {
+  .feed-compose-modal::before { display: none; }
+}
+
+.feed-compose-modal-header {
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 2;
+}
+
+.feed-compose-modal-title {
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -.2px;
+}
+
+.feed-compose-modal-close {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--text-3);
+  transition: all .15s;
+  font-weight: 700;
+}
+
+.feed-compose-modal-close:hover {
+  background: var(--red-light);
+  color: var(--red);
+  border-color: var(--red-border);
+}
+
+.feed-compose-modal-body {
+  padding: 16px 18px;
+}
+
+/* Catégories dans la modale — version compacte */
+.feed-modal-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.feed-modal-cat {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 15px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.feed-modal-cat:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.feed-modal-cat.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.feed-compose-modal-footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  z-index: 2;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+
+/* ─────────────────────────────────────────────
+   FIX 5 : Améliorations générales ergonomie
+   ───────────────────────────────────────────── */
+
+/* Zone de chat — hauteur correcte en mobile */
+@media (max-width: 768px) {
+  .msg-layout {
+    height: calc(100dvh - 52px - 62px); /* topbar + bottom nav */
+  }
+
+  /* Input chat plus grand sur mobile */
+  .chat-input {
+    font-size: 16px !important; /* Évite le zoom iOS */
+    min-height: 44px;
+  }
+
+  /* Bulles plus larges sur mobile */
+  .msg-bubble {
+    max-width: min(88%, 360px);
+  }
+
+  /* Réactions accessibles */
+  .msg-actions {
+    position: static;
+    display: flex !important;
+    margin-top: 4px;
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    gap: 4px;
+  }
+
+  .msg-action-btn {
+    min-width: 36px;
+    height: 32px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 16px;
+  }
+
+  /* Feed post actions — zone tactile min 44px */
+  .feed-action-btn {
+    min-height: 36px;
+    min-width: 44px;
+    padding: 0 10px;
+  }
+
+  /* Chat send button plus grand */
+  .chat-send {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+
+  /* Message privé DM — header fixe */
+  .msg-chan-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--surface);
+  }
+}
+
+/* Pinned post dans le feed — style distinct */
+.feed-board-section {
+  margin: 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+}
+
+/* Thread scroll — assurer hauteur correcte */
+.feed-thread-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Composer dans thread — ne pas cacher sous le clavier */
+.feed-thread-composer {
+  flex-shrink: 0;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+}
+
+/* Animation posts feed */
+.feed-post {
+  animation: feedPostIn .2s ease both;
+}
+
+@keyframes feedPostIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Réactions feed — taille tactile correcte */
+.feed-reaction {
+  min-height: 30px;
+  padding: 0 9px;
+}
+
+/* Smooth scroll sur les listes */
+.feed-scroll--community,
+.chat-messages,
+.feed-thread-scroll {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
