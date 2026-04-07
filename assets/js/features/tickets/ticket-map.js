@@ -43,16 +43,15 @@ function mapPriorityScore(t) {
 }
 
 function mapMarkerColor(t) {
-  return t.statut === 'résolu' || t.statut === 'clos' ? '#10b981' // Green
-    : t.urgence === 'critique' ? '#ef4444' // Red
-    : t.urgence === 'important' ? '#f59e0b' // Orange
-    : '#3b82f6'; // Blue
+  return t.statut === 'résolu' || t.statut === 'clos' ? '#10b981'
+    : t.urgence === 'critique' ? '#ef4444'
+    : t.urgence === 'important' ? '#f59e0b'
+    : '#3b82f6';
 }
 
 function renderMapPage() {
   loadMapPrefs();
   
-  // Cleanup avant re-render
   if (typeof mapInstance !== 'undefined' && mapInstance) { 
     mapInstance.remove(); 
     mapInstance = null; 
@@ -64,7 +63,6 @@ function renderMapPage() {
   const openCount = allT.filter(t => t.lat && t.lng && !['résolu', 'clos'].includes(t.statut)).length;
   const critCount = allT.filter(t => t.lat && t.lng && t.urgence === 'critique' && !['résolu', 'clos'].includes(t.statut)).length;
   
-  // Extraction dynamique des bâtiments existants dans les tickets
   const byBat = allT.filter(t => t.lat && t.lng).reduce((acc, t) => {
     const k = t.batiment || 'Sans bâtiment';
     acc[k] = (acc[k] || 0) + 1;
@@ -76,7 +74,6 @@ function renderMapPage() {
   <div style="padding:0; height:100%; display:flex; flex-direction:column; max-width:1200px; margin:0 auto; animation:fade-in 0.2s ease;">
     
     <div style="padding:16px 16px 12px; flex-shrink:0; background:var(--surface); z-index:10; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
-      
       <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; margin-bottom:16px;">
         <div>
           <h1 style="font-size:24px; font-weight:800; color:var(--text-1); margin:0;">Carte de la résidence</h1>
@@ -85,7 +82,6 @@ function renderMapPage() {
             ${critCount > 0 ? `<span style="color:var(--red); font-weight:600; margin-left:8px;">⚠️ ${critCount} Critique(s)</span>` : ''}
           </p>
         </div>
-        
         <div style="display:flex; background:var(--bg-2); padding:4px; border-radius:10px; border:1px solid var(--border);">
           <button class="btn btn-sm" style="background:${_mapViewMode === 'map' ? 'var(--surface)' : 'transparent'}; color:${_mapViewMode === 'map' ? 'var(--text-1)' : 'var(--text-3)'}; box-shadow:${_mapViewMode === 'map' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'}; border:none;" onclick="setMapViewMode('map')">📍 Carte</button>
           <button class="btn btn-sm" style="background:${_mapViewMode === 'list' ? 'var(--surface)' : 'transparent'}; color:${_mapViewMode === 'list' ? 'var(--text-1)' : 'var(--text-3)'}; box-shadow:${_mapViewMode === 'list' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'}; border:none;" onclick="setMapViewMode('list')">☰ Liste</button>
@@ -99,7 +95,6 @@ function renderMapPage() {
           <option value="important">🟠 Important</option>
           <option value="normal">🔵 Normal</option>
         </select>
-        
         <select id="map-filter-statut" class="select" style="width:160px; padding:6px 12px; font-size:12px;" onchange="onMapFilterChange()">
           <option value="all">Statut : Tous</option>
           <option value="nouveau">Nouveau</option>
@@ -108,11 +103,9 @@ function renderMapPage() {
           <option value="résolu">Résolu</option>
           <option value="clos">Clos</option>
         </select>
-        
         <select id="map-filter-batiment" class="select" style="width:160px; padding:6px 12px; font-size:12px;" onchange="onMapFilterChange()">
           ${batOptions.map(b => `<option value="${b}">${b === 'all' ? 'Bâtiment : Tous' : b}</option>`).join('')}
         </select>
-        
         <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="resetMapFilters()">⟲ Réinitialiser</button>
       </div>
 
@@ -129,7 +122,6 @@ function renderMapPage() {
       <div id="map-card" style="height:100%; width:100%; display:${_mapViewMode === 'list' ? 'none' : 'block'};">
         <div id="map" style="height:100%; width:100%; z-index:1;"></div>
       </div>
-      
       <div id="map-list-card" style="height:100%; overflow-y:auto; padding:16px; display:${_mapViewMode === 'map' ? 'none' : 'block'};">
         <div style="max-width:800px; margin:0 auto;">
           ${renderMapListHtml()}
@@ -138,7 +130,6 @@ function renderMapPage() {
     </div>
   </div>`;
 
-  // Restaurer les valeurs des selects
   const urg = $('map-filter-urgence');
   const sta = $('map-filter-statut');
   const bat = $('map-filter-batiment');
@@ -146,9 +137,7 @@ function renderMapPage() {
   if (sta) sta.value = _mapFilters.statut;
   if (bat) bat.value = _mapFilters.batiment;
 
-  // Init de la carte si on est en mode map
   if (_mapViewMode === 'map') {
-    // Petit délai pour s'assurer que le div #map est bien peint avec ses dimensions finales
     setTimeout(initMap, 100);
   }
 }
@@ -161,7 +150,7 @@ function renderMapListHtml() {
     return new Date(b.created_at) - new Date(a.created_at);
   });
   
-  if (!list.length) return emptyState('📍', 'Aucun signalement', 'Modifiez vos filtres ou la zone sélectionnée.');
+  if (!list.length) return `<div style="padding:24px; text-align:center; color:var(--text-3); font-size:14px;">Aucun signalement ne correspond à vos filtres.</div>`;
   
   return list.map(t => {
     const cColor = mapMarkerColor(t);
@@ -195,14 +184,14 @@ function onMapFilterChange() {
     const el = $('map-list-card');
     if (el) el.innerHTML = `<div style="max-width:800px; margin:0 auto;">${renderMapListHtml()}</div>`;
   } else {
-    initMap(); // Recalcule les points
+    initMap(); 
   }
 }
 
 function setMapViewMode(mode) {
   _mapViewMode = mode === 'list' ? 'list' : 'map';
   saveMapPrefs();
-  renderMapPage();
+  renderMapPage(); // L'initialisation est gérée à l'intérieur de renderMapPage
 }
 
 function resetMapFilters() {
@@ -215,10 +204,14 @@ function initMap() {
   const mapEl = $('map');
   if (!mapEl || typeof L === 'undefined') return;
   
-  // Destruction propre de l'ancienne carte
+  // FIX CRITIQUE: Destruction parfaite de l'instance Leaflet
   if (typeof mapInstance !== 'undefined' && mapInstance) { 
     mapInstance.remove(); 
     mapInstance = null; 
+  }
+  // Si le conteneur DOM garde la trace de l'ancien ID, Leaflet plante. On le nettoie :
+  if (mapEl._leaflet_id) {
+    mapEl._leaflet_id = null;
   }
 
   const baseLat = (typeof COPRO !== 'undefined' && COPRO.lat) ? COPRO.lat : 45.2;
@@ -227,40 +220,31 @@ function initMap() {
   requestAnimationFrame(() => {
     try {
       mapInstance = L.map('map', {
-        zoomControl: false, // On déplace le zoom pour un meilleur design
+        zoomControl: false,
         tap: true,
         tapTolerance: 15,
       }).setView([baseLat, baseLng], 17);
 
-      // Repositionnement du zoom
       L.control.zoom({ position: 'bottomright' }).addTo(mapInstance);
 
-      // Thème clair/sombre de la carte (si supporté par la PWA)
       const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
       const tileUrl = isDark 
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' // Carte sombre stylisée
-        : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'; // Classique
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
         
       L.tileLayer(tileUrl, {
         attribution: '© OpenStreetMap contributors',
         maxZoom: 19
       }).addTo(mapInstance);
 
-      // Marqueur central (La Résidence)
       L.marker([baseLat, baseLng], {
         icon: L.divIcon({
           className: '',
           html: `<div style="width:16px;height:16px;border-radius:4px;background:var(--text-1);border:3px solid var(--surface);box-shadow:0 4px 12px rgba(0,0,0,0.3);transform:translate(-2px,-2px);"></div>`,
           iconSize: [16,16], iconAnchor: [8,8]
         }),
-        zIndexOffset: 1000 // Toujours au dessus
-      }).addTo(mapInstance)
-        .bindPopup(`
-          <div style="text-align:center;">
-            <strong style="font-size:14px;display:block;margin-bottom:4px;">${typeof COPRO !== 'undefined' ? COPRO.nom : 'Résidence'}</strong>
-            <span style="font-size:11px;color:#666;">Point de repère central</span>
-          </div>
-        `);
+        zIndexOffset: 1000
+      }).addTo(mapInstance).bindPopup(`<div style="text-align:center;"><strong>${typeof COPRO !== 'undefined' ? COPRO.nom : 'Résidence'}</strong></div>`);
 
       mapMarkers = [];
       const rows = mapTicketsFiltered();
@@ -271,7 +255,6 @@ function initMap() {
         const cColor = mapMarkerColor(t);
         bounds.push([t.lat, t.lng]);
         
-        // Icône avec ombre et contour blanc (style Apple Maps)
         const icon = L.divIcon({
           className: '',
           html: `<div style="width:14px; height:14px; border-radius:50%; background:${cColor}; border:3px solid #ffffff; box-shadow:0 3px 8px rgba(0,0,0,0.4); transition:transform 0.2s;"></div>`,
@@ -279,37 +262,24 @@ function initMap() {
         });
         
         const m = L.marker([t.lat, t.lng], { icon }).addTo(mapInstance);
-        
-        // Popup stylisée (évite les classes CSS externes car Leaflet isole le DOM)
         m.bindPopup(`
           <div style="min-width:200px; font-family:-apple-system, sans-serif; padding:4px;">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
-              <span style="font-size:10px; font-weight:800; background:${cColor}22; color:${cColor}; padding:2px 6px; border-radius:6px; text-transform:uppercase;">${t.urgence}</span>
-            </div>
             <div style="font-weight:700; font-size:14px; color:#1f2937; margin-bottom:4px; line-height:1.2;">${escHtml(t.titre)}</div>
             <div style="font-size:11px; color:#6b7280; margin-bottom:12px;">📍 ${escHtml(t.batiment||'')}${t.zone ? ' · '+escHtml(t.zone) : ''}</div>
-            
-            <button onclick="openDetail('${t.id}')" style="width:100%; background:${cColor}; color:white; border:none; padding:8px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; box-shadow:0 2px 4px ${cColor}66;">
-              Ouvrir le signalement
-            </button>
+            <button onclick="openDetail('${t.id}')" style="width:100%; background:${cColor}; color:white; border:none; padding:8px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;">Ouvrir le signalement</button>
           </div>
         `, { closeButton: false, className: 'custom-leaflet-popup' });
         
         mapMarkers.push(m);
       });
 
-      // Centrage intelligent
       if (bounds.length > 0) {
-        // Ajout du point central pour toujours garder le contexte de la résidence
         bounds.push([baseLat, baseLng]); 
         mapInstance.fitBounds(L.latLngBounds(bounds).pad(0.15), { maxZoom: 18, animate: true, duration: 1 });
       }
 
-      // Résolution du bug de tuiles grises sur mobile/PWA
       setTimeout(() => mapInstance?.invalidateSize({ animate: false }), 200);
-      setTimeout(() => mapInstance?.invalidateSize({ animate: true }), 600);
 
-      // Adaptation dynamique à la rotation de l'écran
       if (window.ResizeObserver) {
         const ro = new ResizeObserver(() => {
           if (mapInstance) mapInstance.invalidateSize({ animate: false });
