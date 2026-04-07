@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════
-//  MESSAGERIE & COMMUNAUTÉ (Style "Google Messages")
+//  MESSAGERIE & COMMUNAUTÉ (Refonte Pro - Smart Forms & Native UI)
 //  assets/js/features/messages/messages.js
 // ════════════════════════════════════════════════════════════════
 
@@ -94,21 +94,15 @@ function formatRichText(text) {
   if (!text) return '';
   let html = typeof escHtml === 'function' ? escHtml(text) : text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
   
-  // Titres
   html = html.replace(/^### (.*$)/gim, '<h4 style="margin:12px 0 6px; font-weight:800; color:var(--text-1); font-size:14px;">$1</h4>');
   html = html.replace(/^## (.*$)/gim, '<h3 style="margin:14px 0 6px; font-weight:800; color:var(--text-1); font-size:16px;">$1</h3>');
   html = html.replace(/^# (.*$)/gim, '<h2 style="margin:16px 0 8px; font-weight:800; color:var(--text-1); font-size:18px;">$1</h2>');
   
-  // Gras et Italique
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-  
-  // Mentions
   html = html.replace(/@(\S+)/g, '<span style="color:var(--primary); font-weight:700; background:var(--primary-light); padding:2px 6px; border-radius:8px;">@$1</span>');
   
-  // Retours à la ligne
   html = html.replace(/\n/g, '<br>');
-  
   return html;
 }
 
@@ -232,7 +226,6 @@ async function renderMessages() {
     </div>
 
     <div class="msg-layout" id="msg-layout">
-
       <div class="msg-sidebar" id="msg-sidebar" style="background:var(--surface);">
         <div style="padding:16px 20px 8px;">
           <h2 style="font-family:var(--font-head); font-size:22px; font-weight:800; margin-bottom:12px;">Discussions</h2>
@@ -348,7 +341,7 @@ function _updateMobileTabBadges() {
   if (dmBadge) { dmBadge.textContent = dmUnread > 9 ? '9+' : dmUnread; dmBadge.style.display = dmUnread > 0 ? 'flex' : 'none'; }
 }
 
-// ─── RENDU SIDEBAR (Google Messages Style) ───────────────────────────────────
+// ─── RENDU SIDEBAR ───────────────────────────────────────────────────────────
 function renderSidebarGroups() {
   const el = $('chan-list-groups');
   if (!el) return;
@@ -418,9 +411,6 @@ function renderSidebarDMs() {
     const initiale = autreNom.charAt(0).toUpperCase();
     const color = avatarColor(autreNom);
     const unread = _msgState.unreadByConv?.[c.id] || 0;
-    
-    // Fake date for visual completeness (in a real app, this comes from the last message)
-    const mockDateStr = '';
 
     return `
     <div class="msg-dm-item ${isActive?'active':''}" id="chan-${c.id}" onclick="openConv('${c.id}')" style="border-radius:12px; margin-bottom:2px; padding:10px 12px; gap:14px;">
@@ -432,7 +422,6 @@ function renderSidebarDMs() {
           <div style="font-weight:700; font-size:15px; color:var(--text-1); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
             ${escHtml(autreNom)}
           </div>
-          <div style="font-size:11px; color:${unread > 0 ? 'var(--primary)' : 'var(--text-3)'}; font-weight:600;">${mockDateStr}</div>
         </div>
         <div style="font-size:13px; color:${unread > 0 ? 'var(--text-1)' : 'var(--text-3)'}; font-weight:${unread > 0 ? '700' : '400'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
           Message privé...
@@ -456,30 +445,472 @@ function avatarColor(name) {
   return colors[Math.abs(h) % colors.length];
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  FEED COMMUNAUTAIRE
-// ═══════════════════════════════════════════════════════════════════════
-function setFeedFilter(cat) {
-  _msgState.feedFilter = cat;
-  document.querySelectorAll('.feed-cat-chip').forEach(el => {
-    el.classList.toggle('active', el.dataset.cat === cat);
-    el.setAttribute('aria-pressed', el.dataset.cat === cat ? 'true' : 'false');
-  });
-  renderFeed();
+// ─── CHARGEMENT DES CONVERSATIONS ────────────────────────────────────────────
+async function loadConversations() {
+  const { data: memberships } = await sb.from('conversation_membres')
+    .select('conversation_id,lu_jusqu_a').eq('user_id', user.id);
+  const ids = (memberships || []).map(m => m.conversation_id);
+  _msgState.readCursorByConv = Object.fromEntries((memberships || []).map(m => [m.conversation_id, m.lu_jusqu_a || null]));
+  
+  if (!ids.length) { _msgState.conversations = []; renderSidebarGroups(); renderSidebarDMs(); return; }
+
+  const { data, error } = await sb.from('conversations').select('*').in('id', ids).order('created_at');
+  if (error) { console.warn('[msg] loadConversations:', error.message); return; }
+  
+  _msgState.conversations = data || [];
+  await computeUnreadByConversation();
 }
 
-function setFeedComposeCategory(cat) {
-  const ok = feedComposeCatsForUser().some(c => c.id === cat);
-  if (!ok) return;
-  _msgState.feedComposeCategory = cat;
-  try { localStorage.setItem(FEED_COMPOSE_CAT_KEY, cat); } catch { }
+async function computeUnreadByConversation() {
+  const convs = _msgState.conversations || [];
+  const out = {};
+  for (const c of convs) {
+    const cursor = _msgState.readCursorByConv[c.id];
+    let q = sb.from('messages').select('id', { count: 'exact', head: true }).eq('conversation_id', c.id).neq('auteur_id', user.id);
+    if (cursor) q = q.gt('created_at', cursor);
+    const { count } = await q;
+    out[c.id] = count || 0;
+  }
+  _msgState.unreadByConv = out;
+}
+
+// ─── FONCTIONS NAVIGATION MOBILE ─────────────────────────────────────────────
+function mobileShowMain() {
+  const sidebar = $('msg-sidebar');
+  const main = $('msg-main');
+  if (window.innerWidth <= 768) {
+    if (sidebar) { sidebar.classList.add('hidden'); sidebar.style.display = ''; }
+    if (main) main.classList.add('visible');
+  }
+}
+
+function mobileShowSidebar() {
+  const sidebar = $('msg-sidebar');
+  const main = $('msg-main');
+  if (sidebar) { sidebar.classList.remove('hidden'); sidebar.style.display = ''; }
+  if (main) main.classList.remove('visible');
+  _msgState.activeConvId = null;
+}
+
+function mobileBackToChannelList() {
+  if (window.innerWidth <= 768) {
+    _showMobileSidebarFiltered(_msgState.activeChanType === 'dm' ? 'prive' : 'groupe');
+  } else {
+    mobileShowSidebar();
+  }
+}
+
+// ─── OUVERTURE D'UN CANAL/DM ─────────────────────────────────────────────────
+async function openConv(convId) {
+  saveCurrentDraft();
+  stopFeedCommentsPoll();
+  _msgState.activeConvId = convId;
+  _msgState.activeChanType = _msgState.conversations.find(c=>c.id===convId)?.type === 'prive' ? 'dm' : 'chan';
+  _msgState.activeMobileTab = _msgState.activeChanType === 'dm' ? 'dms' : 'channels';
+
+  document.querySelectorAll('.msg-chan-item,.msg-dm-item').forEach(el => el.classList.remove('active'));
+  $(`chan-feed`)?.classList.remove('active');
+  $(`chan-${convId}`)?.classList.add('active');
+
+  document.querySelectorAll('.msg-inner-tab').forEach((t, i) => {
+    const tabs = ['feed', 'channels', 'dms'];
+    t.classList.toggle('active', tabs[i] === _msgState.activeMobileTab);
+  });
+
+  mobileShowMain();
+
+  const conv = _msgState.conversations.find(c => c.id === convId);
+  if (!conv) return;
+  const emoji = conv.titre?.split(' ')[0] || '💬';
+  const titre = conv.titre?.substring(conv.titre.indexOf(' ') + 1) || conv.titre;
+  const isPrive = conv.type === 'prive';
+
+  const main = $('msg-main');
+  if (!main) return;
   
-  document.querySelectorAll('.feed-modal-cat').forEach(el => {
-    el.classList.toggle('active', el.dataset.cat === cat);
+  main.innerHTML = `
+    <div class="msg-chan-header" style="background:var(--surface); border-bottom:1px solid var(--border); padding:12px 16px;">
+      <button class="msg-back-btn" onclick="mobileBackToChannelList()">←</button>
+      <div style="font-size:24px; margin-right:12px; background:var(--bg-2); width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center;">${emoji}</div>
+      <div class="chat-header-info">
+        <div class="msg-chan-title" style="font-size:18px; font-weight:800;">${escHtml(titre)}</div>
+        <div class="msg-chan-desc" style="color:var(--text-3);">${isPrive ? '🔒 Conversation privée' : 'Canal'}</div>
+      </div>
+    </div>
+    
+    <div class="chat-messages" id="chat-messages" style="flex:1; overflow-y:auto; padding:16px;">
+      <div style="text-align:center;padding:40px;"><div class="spinner"></div></div>
+    </div>
+    
+    <div class="msg-reply-bar" id="msg-reply-bar" style="display:none; background:var(--surface-2); border-top:1px solid var(--border); padding:8px 16px; align-items:center; justify-content:space-between;">
+      <div style="font-size:12px; color:var(--text-2);">
+        <span style="color:var(--primary); font-weight:700;">↩️ Réponse à :</span>
+        <span id="msg-reply-bar-content" style="margin-left:8px; font-style:italic;"></span>
+      </div>
+      <button onclick="clearReply()" style="background:none; border:none; cursor:pointer; color:var(--text-3); font-size:16px;">✕</button>
+    </div>
+    
+    <div class="chat-input-bar" style="background:var(--surface); border-top:1px solid var(--border); padding:12px 16px;">
+      <div class="chat-input-wrap" style="background:var(--bg-2); border-radius:24px; padding:4px 4px 4px 16px; border:1px solid var(--border); display:flex; align-items:center;">
+        <button class="btn btn-ghost btn-sm" onclick="pickFeedEmoji(event)" style="padding:4px; font-size:20px; color:var(--text-3); margin-right:8px;">😀</button>
+        <textarea class="chat-input" id="chat-input" placeholder="Message…" rows="1"
+          style="flex:1; border:none; background:transparent; padding:10px 0; font-size:15px; resize:none; max-height:120px; outline:none;"
+          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';onChatInput(event);saveCurrentDraft();"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey&&window.innerWidth>768){event.preventDefault();sendMessage();}"></textarea>
+        
+        <div id="chat-mention-list" class="chat-mention-pop" style="display:none; position:absolute; bottom:100%; left:16px; right:16px; background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:0 -4px 16px rgba(0,0,0,0.1); margin-bottom:8px; z-index:10;"></div>
+        
+        <button class="chat-send" style="width:40px; height:40px; border-radius:50%; background:var(--primary); color:white; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; margin-left:8px;" onclick="sendMessage()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9"/></svg>
+        </button>
+      </div>
+    </div>`;
+
+  await loadMessages(convId);
+  restoreCurrentDraft();
+  _msgState.unreadByConv[convId] = 0;
+  renderSidebarGroups();
+  renderSidebarDMs();
+  _updateMobileTabBadges();
+  markConvRead(convId);
+}
+
+async function loadMessages(convId) {
+  const { data, error } = await sb.from('messages')
+    .select('*, profiles(nom, prenom), reply:reply_to_id(texte, profiles(prenom,nom))')
+    .eq('conversation_id', convId)
+    .order('created_at', { ascending: true })
+    .limit(100);
+  if (error) { console.warn('[msg] loadMessages:', error.message); return; }
+  _msgState.messages = data || [];
+
+  const msgIds = (data||[]).map(m => m.id).filter(id => !String(id).startsWith('tmp-'));
+  if (msgIds.length) {
+    const { data: reacts } = await sb.from('reactions').select('*').in('target_id', msgIds).eq('target_type', 'message');
+    _msgState.msgReactions = {};
+    (reacts||[]).forEach(r => {
+      if (!_msgState.msgReactions[r.target_id]) _msgState.msgReactions[r.target_id] = [];
+      _msgState.msgReactions[r.target_id].push(r);
+    });
+  }
+
+  renderMessageBubbles();
+}
+
+function renderMessageBubbles() {
+  const el = $('chat-messages');
+  if (!el) return;
+  const msgs = _msgState.messages;
+  
+  if (!msgs.length) {
+    el.innerHTML = '<div style="text-align:center; padding:60px 20px; color:var(--text-3);"><div style="font-size:48px; margin-bottom:16px;">💬</div><div style="font-weight:700; font-size:16px; color:var(--text-1);">Nouvelle discussion</div><div>Soyez le premier à envoyer un message !</div></div>';
+    return;
+  }
+  
+  let lastDate = null, lastAuteur = null;
+  const html = [];
+  
+  msgs.forEach((m, idx) => {
+    const isMine = m.auteur_id === user.id;
+    const auteur = m.profiles ? displayName(m.profiles.prenom, m.profiles.nom, null, '?') : '?';
+    const d = new Date(m.created_at);
+    const dateStr = d.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+    const timeStr = d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+    
+    const showSender = !isMine && auteur !== lastAuteur;
+    const isConsecutive = auteur === lastAuteur && dateStr === lastDate;
+
+    if (dateStr !== lastDate) {
+      html.push(`<div style="display:flex; justify-content:center; margin:24px 0 16px;"><span style="background:var(--bg-2); border:1px solid var(--border); color:var(--text-3); font-size:11px; font-weight:700; text-transform:uppercase; padding:4px 12px; border-radius:12px; letter-spacing:0.05em;">${dateStr}</span></div>`);
+      lastDate = dateStr; 
+      lastAuteur = null;
+    }
+
+    let replyHtml = '';
+    if (m.reply) {
+      const replyAuteur = m.reply.profiles ? displayName(m.reply.profiles.prenom, m.reply.profiles.nom, null, '?') : '?';
+      replyHtml = `
+      <div style="background:rgba(0,0,0,0.05); border-left:3px solid ${isMine ? 'rgba(255,255,255,0.5)' : 'var(--primary)'}; padding:6px 10px; border-radius:6px; margin-bottom:6px; font-size:12px; opacity:0.9;">
+        <div style="font-weight:800; margin-bottom:2px;">${escHtml(replyAuteur)}</div>
+        <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${formatRichText((m.reply.texte||'').substring(0,60))}</div>
+      </div>`;
+    }
+
+    const texteHtml = formatRichText(m.texte || '');
+    const color = avatarColor(auteur);
+
+    const reacts = (_msgState.msgReactions || {})[m.id] || [];
+    const rGroups = {};
+    reacts.forEach(r => {
+      if (!rGroups[r.emoji]) rGroups[r.emoji] = { count:0, mine:false };
+      rGroups[r.emoji].count++;
+      if (r.user_id === user.id) rGroups[r.emoji].mine = true;
+    });
+    const reactHtml = Object.entries(rGroups).map(([e, d]) =>
+      `<div class="msg-reaction ${d.mine?'mine':''}" onclick="toggleMsgReaction('${m.id}','${e}')" style="background:${d.mine?'var(--primary-light)':'var(--surface)'}; border:1px solid ${d.mine?'var(--primary)':'var(--border)'}; padding:2px 6px; border-radius:12px; font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
+        <span>${e}</span><span style="color:${d.mine?'var(--primary)':'var(--text-3)'};">${d.count}</span>
+      </div>`
+    ).join('');
+
+    html.push(`
+    <div style="display:flex; flex-direction:column; align-items:${isMine ? 'flex-end' : 'flex-start'}; margin-bottom:${isConsecutive ? '4px' : '16px'}; max-width:85%; align-self:${isMine ? 'flex-end' : 'flex-start'}; position:relative;" class="msg-hover-zone">
+      ${showSender ? `<div style="font-size:11px; font-weight:600; color:var(--text-3); margin-bottom:4px; padding-left:44px;">${escHtml(auteur)}</div>` : ''}
+      <div style="display:flex; align-items:flex-end; gap:8px;">
+        ${!isMine ? `<div style="width:28px; height:28px; border-radius:50%; background:${isConsecutive ? 'transparent' : color}; color:white; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex-shrink:0;">${isConsecutive ? '' : auteur.charAt(0).toUpperCase()}</div>` : ''}
+        
+        <div style="position:relative;">
+          <div style="background:${isMine ? 'var(--primary)' : 'var(--surface)'}; color:${isMine ? 'white' : 'var(--text-1)'}; padding:10px 14px; border-radius:18px; border-bottom-${isMine ? 'right' : 'left'}-radius:${isConsecutive ? '18px' : '4px'}; border:1px solid ${isMine ? 'var(--primary)' : 'var(--border)'}; font-size:14.5px; line-height:1.4; box-shadow:0 1px 2px rgba(0,0,0,0.05); word-break:break-word;">
+            ${replyHtml}
+            ${texteHtml}
+          </div>
+          
+          <div class="msg-floating-actions" style="position:absolute; ${isMine ? 'right:100%; margin-right:8px;' : 'left:100%; margin-left:8px;'} top:50%; transform:translateY(-50%); display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:4px; box-shadow:0 4px 12px rgba(0,0,0,0.1); opacity:0; transition:opacity 0.2s; pointer-events:none;">
+             <button style="border:none; background:transparent; font-size:16px; cursor:pointer; padding:4px;" onclick="setReply('${m.id}','${escHtml(auteur).replace(/'/g,"\\'")}', '...')">↩️</button>
+             ${EMOJIS.slice(0,3).map(e => `<button style="border:none; background:transparent; font-size:16px; cursor:pointer; padding:4px;" onclick="toggleMsgReaction('${m.id}','${e}')">${e}</button>`).join('')}
+          </div>
+        </div>
+      </div>
+      ${reactHtml ? `<div style="display:flex; gap:4px; margin-top:4px; ${isMine ? 'padding-right:4px;' : 'padding-left:44px;'}">${reactHtml}</div>` : ''}
+      <div style="font-size:10px; color:var(--text-3); margin-top:4px; ${isMine ? 'padding-right:4px;' : 'padding-left:44px;'}">${timeStr}</div>
+    </div>`);
+    
+    lastAuteur = auteur;
   });
   
-  // Re-render le corps du formulaire dynamiquement
-  renderSmartComposerForm(cat);
+  if (!document.getElementById('msg-hover-css')) {
+    const s = document.createElement('style');
+    s.id = 'msg-hover-css';
+    s.innerHTML = `@media(min-width:769px){ .msg-hover-zone:hover .msg-floating-actions { opacity:1 !important; pointer-events:auto !important; } }`;
+    document.head.appendChild(s);
+  }
+
+  el.innerHTML = `<div style="display:flex; flex-direction:column; padding:16px;">${html.join('')}</div>`;
+  requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+}
+
+function setReply(msgId, auteur, texte) {
+  _msgState.replyTo = { id: msgId, auteur, texte };
+  const bar = $('msg-reply-bar');
+  const content = $('msg-reply-bar-content');
+  if (bar) bar.style.display = 'flex';
+  if (content) content.textContent = `${auteur} : ${texte}`;
+  $('chat-input')?.focus();
+}
+
+function clearReply() {
+  _msgState.replyTo = null;
+  const bar = $('msg-reply-bar');
+  if (bar) bar.style.display = 'none';
+}
+
+async function sendMessage() {
+  const input = $('chat-input');
+  const texte = input?.value.trim();
+  if (!texte || !_msgState.activeConvId) return;
+  
+  const replyState = _msgState.replyTo ? { ..._msgState.replyTo } : null;
+  input.value = ''; input.style.height = 'auto';
+  saveCurrentDraft();
+
+  const payload = {
+    conversation_id: _msgState.activeConvId,
+    auteur_id: user.id,
+    texte,
+    reply_to_id: replyState?.id || null,
+    reply_preview: replyState ? `${replyState.auteur} : ${replyState.texte}` : null,
+  };
+
+  clearReply();
+
+  const { data: inserted, error } = await sb.from('messages')
+    .insert(payload)
+    .select('*, profiles(nom, prenom), reply:reply_to_id(texte, profiles(prenom,nom))')
+    .single();
+    
+  if (error) { toast('Erreur envoi', 'err'); return; }
+
+  _msgState.messages.push(inserted || {
+    ...payload, id: 'tmp-' + Date.now(),
+    created_at: new Date().toISOString(),
+    profiles: { prenom: profile?.prenom, nom: profile?.nom },
+    reply: replyState ? { texte: replyState.texte, profiles: { prenom: replyState.auteur } } : null,
+  });
+  
+  renderMessageBubbles();
+  markConvRead(_msgState.activeConvId);
+}
+
+async function toggleMsgReaction(msgId, emoji) {
+  if (!_msgState.msgReactions) _msgState.msgReactions = {};
+  const reacts = _msgState.msgReactions[msgId] || [];
+  const existing = reacts.find(r => r.user_id === user.id && r.emoji === emoji);
+  
+  if (existing) {
+    await sb.from('reactions').delete().eq('id', existing.id);
+    _msgState.msgReactions[msgId] = reacts.filter(r => r.id !== existing.id);
+  } else {
+    const { data } = await sb.from('reactions').insert({
+      user_id: user.id, target_id: msgId, target_type: 'message', emoji
+    }).select().single();
+    if (!_msgState.msgReactions[msgId]) _msgState.msgReactions[msgId] = [];
+    if (data) _msgState.msgReactions[msgId].push(data);
+  }
+  renderMessageBubbles();
+}
+
+async function markConvRead(convId) {
+  await sb.from('conversation_membres').upsert({
+    conversation_id: convId, user_id: user.id,
+    lu_jusqu_a: new Date().toISOString()
+  }, { onConflict: 'conversation_id,user_id' });
+}
+
+// ─── MENTIONS ET DM PRIVÉ ────────────────────────────────────────────────────
+async function onChatInput(e) {
+  const ta = e.target;
+  const val = ta.value;
+  const cursor = ta.selectionStart;
+  const before = val.substring(0, cursor);
+  const atMatch = before.match(/@([a-zA-ZÀ-ÿ-]*)$/);
+  const ml = $('chat-mention-list');
+  
+  if (!atMatch) { if (ml) ml.style.display = 'none'; return; }
+  
+  const query = atMatch[1].toLowerCase();
+  const { data: profs } = await sb.from('profiles').select('id,nom,prenom,role')
+    .or(`prenom.ilike.${query}%,nom.ilike.${query}%`).neq('id', user.id).limit(5);
+    
+  const list = profs || [];
+  if (!ml || !list.length) { if (ml) ml.style.display = 'none'; return; }
+  
+  const roleL = { administrateur:'Admin', syndic:'Syndic', membre_cs:'CS', 'copropriétaire':'Copro' };
+  
+  ml.innerHTML = list.map(p => `
+    <div class="mention-item" onclick="insertChatMention('${p.id}','${(p.prenom||p.nom||'').replace(/'/g,"\\'")}','${(p.nom||'').replace(/'/g,"\\'")}')" style="display:flex; align-items:center; gap:10px; padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border);">
+      <div style="width:24px; height:24px; border-radius:50%; background:var(--primary); color:white; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:bold;">${(p.prenom||p.nom||'?').charAt(0).toUpperCase()}</div>
+      <div>
+        <div style="font-weight:600; font-size:13px; color:var(--text-1);">${displayName(p.prenom,p.nom,null,'?')}</div>
+        <div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:0.05em;">${roleL[p.role]||p.role}</div>
+      </div>
+    </div>`).join('');
+  ml.style.display = 'block';
+}
+
+function insertChatMention(userId, prenom, nom) {
+  const ta = $('chat-input');
+  const ml = $('chat-mention-list');
+  if (!ta) return;
+  const val = ta.value;
+  const cursor = ta.selectionStart;
+  const name = displayName(prenom, nom, null, prenom);
+  const newBefore = val.substring(0, cursor).replace(/@[a-zA-ZÀ-ÿ-]*$/, `@${name} `);
+  ta.value = newBefore + val.substring(cursor);
+  ta.selectionStart = ta.selectionEnd = newBefore.length;
+  ta.focus();
+  if (ml) ml.style.display = 'none';
+}
+
+async function openNewDM() {
+  const { data: users } = await sb.from('profiles')
+    .select('id,nom,prenom,email').eq('actif', true).neq('id', user.id).order('prenom');
+  if (!users?.length) { toast('Aucun autre utilisateur', 'warn'); return; }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay open';
+  overlay.id = 'dm-modal';
+  overlay.innerHTML = `
+  <div class="modal" style="max-width:400px; border-radius:16px;">
+    <div class="mh" style="border-bottom:1px solid var(--border); padding:16px 20px;">
+      <span class="mh-title" style="font-size:18px; font-weight:800;">Nouveau Message</span>
+      <button class="mclose" onclick="$('dm-modal').remove()">×</button>
+    </div>
+    <div class="mb" style="padding:20px;">
+      <div style="position:relative; margin-bottom:16px;">
+        <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:14px; opacity:0.5;">🔍</span>
+        <input class="input" id="dm-search" placeholder="Rechercher un résident…" oninput="filterDMList()" style="margin:0; padding-left:36px; border-radius:12px;">
+      </div>
+      <div id="dm-user-list" style="max-height:300px; overflow-y:auto; margin:0 -20px; padding:0 20px;">
+        ${users.map(u => {
+          const nom = displayName(u.prenom, u.nom, u.email, 'Résident');
+          const color = avatarColor(nom);
+          return `
+          <div class="msg-dm-item" style="padding:10px 12px; border-radius:12px; display:flex; align-items:center; gap:12px; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='var(--bg-2)'" onmouseout="this.style.background='transparent'" onclick="startDM('${u.id}','${nom.replace(/'/g,"\\'")}')">
+            <div style="background:${color}; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:16px; font-weight:800; flex-shrink:0;">${nom.charAt(0).toUpperCase()}</div>
+            <div>
+              <div style="font-weight:700; font-size:14px; color:var(--text-1);">${escHtml(nom)}</div>
+              <div style="font-size:11px; color:var(--text-3);">${u.email}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => $('dm-search')?.focus(), 50);
+}
+
+function filterDMList() {
+  const q = $('dm-search')?.value.toLowerCase() || '';
+  document.querySelectorAll('#dm-user-list .msg-dm-item').forEach(el => {
+    el.style.display = el.textContent.toLowerCase().includes(q) ? 'flex' : 'none';
+  });
+}
+
+async function startDM(targetId, targetNom) {
+  $('dm-modal')?.remove();
+  const existing = _msgState.conversations.find(c =>
+    c.type === 'prive' && (c.membre_a === targetId || c.membre_b === targetId)
+  );
+  if (existing) { openConv(existing.id); return; }
+
+  const titre = `🔒 ${targetNom}`;
+  const { data: conv } = await sb.from('conversations')
+    .insert({ titre, type: 'prive', created_by: user.id, membre_a: user.id, membre_b: targetId })
+    .select().single();
+    
+  if (conv) {
+    await sb.from('conversation_membres').insert([
+      { conversation_id: conv.id, user_id: user.id },
+      { conversation_id: conv.id, user_id: targetId }
+    ]);
+    await loadConversations();
+    openConv(conv.id);
+  }
+}
+
+function filterConvsByRole(convs) {
+  return convs.filter(c => {
+    if (c.titre?.includes('Conseil Syndical')) {
+      return ['administrateur','syndic','membre_cs'].includes(profile?.role);
+    }
+    return true;
+  });
+}
+
+function pickFeedEmoji(e) {
+  const btn = e.target.closest('button');
+  const existing = document.querySelector('.emoji-picker');
+  if (existing) { existing.remove(); return; }
+  const picker = document.createElement('div');
+  picker.className = 'emoji-picker';
+  picker.style.cssText = 'position:fixed; z-index:200; background:var(--surface); border:1px solid var(--border); padding:8px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.1); display:flex; gap:4px;';
+  const rect = btn.getBoundingClientRect();
+  picker.style.left = rect.left + 'px';
+  picker.style.top = (rect.top - 48) + 'px';
+  picker.innerHTML = EMOJIS.map(e =>
+    `<button style="border:none; background:transparent; font-size:20px; cursor:pointer; padding:4px; border-radius:8px;" onmouseover="this.style.background='var(--bg-2)'" onmouseout="this.style.background='transparent'" onclick="insertFeedEmoji('${e}')">${e}</button>`
+  ).join('');
+  document.body.appendChild(picker);
+  setTimeout(() => document.addEventListener('click', () => picker.remove(), { once: true }), 10);
+}
+
+function insertFeedEmoji(emoji) {
+  const input = $('feed-compose-modal-input') || $('chat-input');
+  if (input) {
+    const pos = input.selectionStart || input.value.length;
+    input.value = input.value.slice(0, pos) + emoji + input.value.slice(pos);
+    input.focus();
+  }
 }
 
 // ─── SMART COMPOSER (Formulaires Spécifiques) ────────────────────────────────
@@ -497,7 +928,6 @@ function renderSmartComposerForm(cat) {
 
   let html = '';
 
-  // Barre d'outils Rich Text globale
   const toolbar = `
     <div style="display:flex; gap:4px; padding:8px 12px; background:var(--surface-2); border-radius:12px 12px 0 0; border:1px solid var(--border); border-bottom:none;">
       <button class="btn btn-ghost btn-sm" onclick="insertMarkdown('**', '**')" style="padding:4px 8px; font-weight:800;" title="Gras">B</button>
@@ -533,7 +963,6 @@ function renderSmartComposerForm(cat) {
       <textarea id="feed-compose-modal-input" class="input" rows="6" placeholder="${ph}" style="resize:none; min-height:140px; border-radius:0 0 12px 12px; margin-top:0;" oninput="saveCurrentDraft()"></textarea>
     `;
   } else {
-    // Standard
     html = `
       ${toolbar}
       <textarea id="feed-compose-modal-input" class="input" rows="5" placeholder="${ph}" style="resize:none; min-height:120px; border-radius:0 0 12px 12px; margin-top:0;" oninput="saveCurrentDraft()"></textarea>
@@ -554,11 +983,23 @@ function insertMarkdown(prefix, suffix) {
   
   ta.value = text.substring(0, start) + prefix + selectedText + suffix + text.substring(end);
   ta.focus();
-  // Repositionne le curseur à l'intérieur
   if (!selectedText) ta.selectionEnd = start + prefix.length;
 }
 
-// ─── Ouvre la modale de composition ──────────────────────────────────────────
+// ─── Modale Compose (Ouverture / Fermeture / Publication) ───
+function setFeedComposeCategory(cat) {
+  const ok = feedComposeCatsForUser().some(c => c.id === cat);
+  if (!ok) return;
+  _msgState.feedComposeCategory = cat;
+  try { localStorage.setItem(FEED_COMPOSE_CAT_KEY, cat); } catch { }
+  
+  document.querySelectorAll('.feed-modal-cat').forEach(el => {
+    el.classList.toggle('active', el.dataset.cat === cat);
+  });
+  
+  renderSmartComposerForm(cat);
+}
+
 function openFeedComposeModal() {
   $('feed-compose-modal-overlay')?.remove();
 
@@ -583,9 +1024,7 @@ function openFeedComposeModal() {
           <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);margin-bottom:10px;">Catégorie</div>
           <div class="feed-modal-cats" style="display:flex; flex-wrap:wrap; gap:8px;">${composeCatHtml}</div>
         </div>
-
         <div id="smart-compose-fields"></div>
-        
       </div>
       <div class="feed-compose-modal-footer" style="padding:16px 24px; border-top:1px solid var(--border); background:var(--bg-2);">
         <button type="button" class="btn btn-secondary" onclick="closeFeedComposeModal()">Annuler</button>
@@ -594,11 +1033,7 @@ function openFeedComposeModal() {
     </div>`;
 
   document.body.appendChild(overlay);
-
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay) closeFeedComposeModal();
-  });
-
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeFeedComposeModal(); });
   renderSmartComposerForm(cat);
 }
 
@@ -609,7 +1044,6 @@ function closeFeedComposeModal() {
   setTimeout(() => overlay.remove(), 150);
 }
 
-// ─── Compile & Sauvegarde le Smart Form ──────────────────────────────────────
 async function publishFeedPost() {
   const cat = _msgState.feedComposeCategory;
   const input = $('feed-compose-modal-input');
@@ -618,14 +1052,12 @@ async function publishFeedPost() {
   const btn = $('btn-publish-feed');
   if (btn) { btn.disabled = true; btn.textContent = 'Publication...'; }
 
-  // Compilation selon la catégorie
   let titre_panneau = '';
   
   if (cat === 'petites_annonces') {
     const t = $('fc-titre')?.value.trim();
     const p = $('fc-prix')?.value.trim();
     if (!t) { toast('Titre de l\'annonce requis', 'err'); btn.disabled=false; return; }
-    // On met en forme dans le contenu
     contenu = `### 🏷️ ${t}\n${p ? `**Prix / Modalité :** ${p}\n` : ''}\n${contenu}`;
   } 
   else if (cat === 'evenements') {
@@ -750,7 +1182,6 @@ async function openFeed() {
       </div>
     </div>`;
 
-  // Media Query pour afficher le composer desktop uniquement sur les grands écrans
   const style = document.createElement('style');
   style.innerHTML = `@media(min-width:769px) { .feed-compose-desktop { display:flex !important; } .feed-fab-mobile { display:none !important; } }`;
   $('msg-main').appendChild(style);
@@ -868,7 +1299,6 @@ function renderFeedPost(p, isPinnedBoard = false) {
   let body = '';
   if (p.type === 'post') {
     const titreBloc = p.titre_panneau ? `<div style="font-family:var(--font-head); font-size:18px; font-weight:800; color:var(--text-1); margin-bottom:8px;">${escHtml(p.titre_panneau)}</div>` : '';
-    // Formatage texte enrichi
     body = `${titreBloc}<div style="font-size:14.5px; line-height:1.6; color:var(--text-1); word-break:break-word;">${formatRichText(p.contenu)}</div>`;
   } else if (p.type === 'ticket') {
     body = `<div style="background:var(--blue-light); border:1px solid var(--blue-border); padding:12px; border-radius:10px; color:var(--accent); font-weight:600;">🔧 ${escHtml(p.contenu)}</div>`;
@@ -917,6 +1347,48 @@ function renderFeedPost(p, isPinnedBoard = false) {
   </div>`;
 }
 
+// ─── ACTIONS SUR LE FEED (Suppression, Epinglage, Réactions) ─────────────────
+async function deleteFeedPost(postId) {
+  if (!confirm('Voulez-vous vraiment supprimer ce post et tous ses commentaires ?')) return;
+  await sb.from('feed_posts').delete().eq('id', postId);
+  _msgState.feed = _msgState.feed.filter(p => p.id !== postId);
+  renderFeed();
+}
+
+async function toggleFeedPin(postId) {
+  if (typeof canManageAnnonces === 'function' && !canManageAnnonces()) return;
+  const post = _msgState.feed.find(p => p.id === postId);
+  if (!post || post.type !== 'post') return;
+  const next = !post.epingle;
+  const { error } = await sb.from('feed_posts').update({ epingle: next }).eq('id', postId);
+  if (error) return;
+  post.epingle = next;
+  _msgState.feed = sortFeedPosts(_msgState.feed);
+  renderFeed();
+}
+
+async function toggleFeedReaction(postId, emoji) {
+  const sid = String(postId);
+  let reacts = _msgState.feedReactions[sid] || [];
+  const existing = reacts.find(r => r.user_id === user.id && r.emoji === emoji);
+  if (existing) {
+    await sb.from('reactions').delete().eq('id', existing.id);
+    reacts = reacts.filter(r => r.id !== existing.id);
+    _msgState.feedReactions[sid] = reacts;
+  } else {
+    const { data } = await sb.from('reactions').insert({
+      user_id: user.id, target_id: sid, target_type: 'post', emoji
+    }).select().single();
+    if (!_msgState.feedReactions[sid]) _msgState.feedReactions[sid] = [];
+    if (data) _msgState.feedReactions[sid].push(data);
+  }
+  const postEl = $(`post-${sid}`);
+  const post = _msgState.feed.find(p => String(p.id) === sid);
+  if (postEl && post) {
+    postEl.outerHTML = renderFeedPost(post, _msgState.feedFilter === 'tout' || _msgState.feedFilter === 'panneau');
+  }
+}
+
 // ─── THREAD (Fil de commentaires) ──────────────────────────────────────────
 async function openFeedThread(postId) {
   const sid = String(postId);
@@ -938,7 +1410,6 @@ async function openFeedThread(postId) {
   const threadPane = $('feed-thread-pane');
   if (!threadPane) return;
 
-  // On utilise le même render pour le header du post
   const postHtml = renderFeedPost(post).replace('border-top:1px solid var(--border); padding-top:12px;', 'display:none;');
 
   threadPane.innerHTML = `
@@ -1001,103 +1472,16 @@ function renderFeedCommentLine(c) {
   </div>`;
 }
 
-// ─── CHAT CANAUX ET DM (Google Messages Style) ────────────────────────────────
-function renderMessageBubbles() {
-  const el = $('chat-messages');
-  if (!el) return;
-  const msgs = _msgState.messages;
-  
-  if (!msgs.length) {
-    el.innerHTML = '<div style="text-align:center; padding:60px 20px; color:var(--text-3);"><div style="font-size:48px; margin-bottom:16px;">💬</div><div style="font-weight:700; font-size:16px; color:var(--text-1);">Nouvelle discussion</div><div>Soyez le premier à envoyer un message !</div></div>';
-    return;
-  }
-  
-  let lastDate = null, lastAuteur = null;
-  const html = [];
-  
-  msgs.forEach((m, idx) => {
-    const isMine = m.auteur_id === user.id;
-    const auteur = m.profiles ? displayName(m.profiles.prenom, m.profiles.nom, null, '?') : '?';
-    const d = new Date(m.created_at);
-    const dateStr = d.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
-    const timeStr = d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
-    
-    // Détermine si on doit afficher l'avatar/nom (si c'est un nouveau bloc de message de la même personne)
-    const showSender = !isMine && auteur !== lastAuteur;
-    const isConsecutive = auteur === lastAuteur && dateStr === lastDate;
-
-    if (dateStr !== lastDate) {
-      html.push(`<div style="display:flex; justify-content:center; margin:24px 0 16px;"><span style="background:var(--bg-2); border:1px solid var(--border); color:var(--text-3); font-size:11px; font-weight:700; text-transform:uppercase; padding:4px 12px; border-radius:12px; letter-spacing:0.05em;">${dateStr}</span></div>`);
-      lastDate = dateStr; 
-      lastAuteur = null;
-    }
-
-    let replyHtml = '';
-    if (m.reply) {
-      const replyAuteur = m.reply.profiles ? displayName(m.reply.profiles.prenom, m.reply.profiles.nom, null, '?') : '?';
-      replyHtml = `
-      <div style="background:rgba(0,0,0,0.05); border-left:3px solid ${isMine ? 'rgba(255,255,255,0.5)' : 'var(--primary)'}; padding:6px 10px; border-radius:6px; margin-bottom:6px; font-size:12px; opacity:0.9;">
-        <div style="font-weight:800; margin-bottom:2px;">${escHtml(replyAuteur)}</div>
-        <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${formatRichText((m.reply.texte||'').substring(0,60))}</div>
-      </div>`;
-    }
-
-    const texteHtml = formatRichText(m.texte || '');
-    const color = avatarColor(auteur);
-
-    html.push(`
-    <div style="display:flex; flex-direction:column; align-items:${isMine ? 'flex-end' : 'flex-start'}; margin-bottom:${isConsecutive ? '4px' : '16px'}; max-width:85%; align-self:${isMine ? 'flex-end' : 'flex-start'}; position:relative;" class="msg-hover-zone">
-      
-      ${showSender ? `<div style="font-size:11px; font-weight:600; color:var(--text-3); margin-bottom:4px; padding-left:44px;">${escHtml(auteur)}</div>` : ''}
-      
-      <div style="display:flex; align-items:flex-end; gap:8px;">
-        ${!isMine ? `
-          <div style="width:28px; height:28px; border-radius:50%; background:${isConsecutive ? 'transparent' : color}; color:white; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex-shrink:0;">
-            ${isConsecutive ? '' : auteur.charAt(0).toUpperCase()}
-          </div>
-        ` : ''}
-        
-        <div style="position:relative;">
-          <div style="
-            background:${isMine ? 'var(--primary)' : 'var(--surface)'}; 
-            color:${isMine ? 'white' : 'var(--text-1)'}; 
-            padding:10px 14px; 
-            border-radius:18px; 
-            border-bottom-${isMine ? 'right' : 'left'}-radius:${isConsecutive ? '18px' : '4px'};
-            border:1px solid ${isMine ? 'var(--primary)' : 'var(--border)'}; 
-            font-size:14px; line-height:1.4; box-shadow:0 1px 2px rgba(0,0,0,0.05);
-            word-break:break-word;
-          ">
-            ${replyHtml}
-            ${texteHtml}
-          </div>
-          
-          <div class="msg-floating-actions" style="position:absolute; ${isMine ? 'right:100%; margin-right:8px;' : 'left:100%; margin-left:8px;'} top:50%; transform:translateY(-50%); display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:4px; box-shadow:0 4px 12px rgba(0,0,0,0.1); opacity:0; transition:opacity 0.2s; pointer-events:none;">
-             <button style="border:none; background:transparent; font-size:16px; cursor:pointer;" onclick="setReply('${m.id}','${escHtml(auteur).replace(/'/g,"\\'")}', '...')">↩️</button>
-          </div>
-        </div>
-      </div>
-      
-      <div style="font-size:10px; color:var(--text-3); margin-top:4px; ${isMine ? 'padding-right:4px;' : 'padding-left:44px;'}">${timeStr}</div>
-    </div>`);
-    
-    lastAuteur = auteur;
-  });
-  
-  // Injecter un peu de CSS pour les actions au hover
-  if (!document.getElementById('msg-hover-css')) {
-    const s = document.createElement('style');
-    s.id = 'msg-hover-css';
-    s.innerHTML = `.msg-hover-zone:hover .msg-floating-actions { opacity:1 !important; pointer-events:auto !important; }`;
-    document.head.appendChild(s);
-  }
-
-  el.innerHTML = `<div style="display:flex; flex-direction:column; padding:16px;">${html.join('')}</div>`;
-  requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+function setFeedThreadHasMore(hasMore, oldestLoadedAt) {
+  _msgState.feedThreadState.hasMore = !!hasMore;
+  _msgState.feedThreadState.oldestLoadedAt = oldestLoadedAt || null;
 }
 
-// Les fonctions existantes (loadFeedThreadComments, loadMessages, sendMessage etc.) restent inchangées 
-// et s'insèrent parfaitement dans la nouvelle interface.
+function loadFeedThreadOlder() {
+  const sid = _msgState.activeFeedThreadPostId;
+  if (!sid) return;
+  loadFeedThreadComments(sid, { older: true });
+}
 
 async function loadFeedThreadComments(postId, { older = false } = {}) {
   const sid = String(postId);
@@ -1154,16 +1538,6 @@ async function loadFeedThreadComments(postId, { older = false } = {}) {
   scrollEl.scrollTop = newScrollHeight - prevScrollHeight + prevScrollTop;
 }
 
-// ─── Les fonctions techniques pures sont préservées à l'identique pour éviter les régressions ───
-function setFeedThreadHasMore(hasMore, oldestLoadedAt) {
-  _msgState.feedThreadState.hasMore = !!hasMore;
-  _msgState.feedThreadState.oldestLoadedAt = oldestLoadedAt || null;
-}
-function loadFeedThreadOlder() {
-  const sid = _msgState.activeFeedThreadPostId;
-  if (!sid) return;
-  loadFeedThreadComments(sid, { older: true });
-}
 async function sendFeedThreadComment() {
   const sid = _msgState.activeFeedThreadPostId;
   if (!sid) return;
@@ -1184,6 +1558,7 @@ async function sendFeedThreadComment() {
   const withRef = { ...newC, reference_id: sid };
   await appendFeedThreadComment(withRef);
 }
+
 async function appendFeedThreadComment(c) {
   const sid = String(_msgState.activeFeedThreadPostId || '');
   if (!sid || String(c.reference_id) !== sid) return;
@@ -1203,44 +1578,31 @@ async function appendFeedThreadComment(c) {
   const ub = $(`feed-unread-${sid}`);
   if (ub) ub.style.display = 'none';
 }
-async function deleteFeedPost(postId) {
-  if (!confirm('Voulez-vous vraiment supprimer ce post ?')) return;
-  await sb.from('feed_posts').delete().eq('id', postId);
-  _msgState.feed = _msgState.feed.filter(p => p.id !== postId);
-  renderFeed();
+
+// ─── REALTIME WEBSOCKETS (CANAUX + FEED) ──────────────────────────────────────
+function startMsgRealtime() {
+  if (_msgState.channel) return;
+  _msgState.channel = sb.channel('messages-global')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+      const m = payload.new;
+      if (m.conversation_id === _msgState.activeConvId) {
+        if (m.auteur_id === user.id) return;
+        sb.from('profiles').select('nom,prenom').eq('id', m.auteur_id).single().then(({ data }) => {
+          _msgState.messages.push({ ...m, profiles: data });
+          renderMessageBubbles();
+          markConvRead(m.conversation_id);
+        });
+      } else if (m.auteur_id !== user.id) {
+        _msgState.unreadByConv[m.conversation_id] = (_msgState.unreadByConv[m.conversation_id] || 0) + 1;
+        renderSidebarGroups();
+        renderSidebarDMs();
+        _updateMobileTabBadges();
+        if (typeof toast === 'function') toast('💬 Nouveau message', 'ok');
+      }
+    })
+    .subscribe();
 }
-async function toggleFeedPin(postId) {
-  if (typeof canManageAnnonces === 'function' && !canManageAnnonces()) return;
-  const post = _msgState.feed.find(p => p.id === postId);
-  if (!post || post.type !== 'post') return;
-  const next = !post.epingle;
-  const { error } = await sb.from('feed_posts').update({ epingle: next }).eq('id', postId);
-  if (error) return;
-  post.epingle = next;
-  _msgState.feed = sortFeedPosts(_msgState.feed);
-  renderFeed();
-}
-async function toggleFeedReaction(postId, emoji) {
-  const sid = String(postId);
-  let reacts = _msgState.feedReactions[sid] || [];
-  const existing = reacts.find(r => r.user_id === user.id && r.emoji === emoji);
-  if (existing) {
-    await sb.from('reactions').delete().eq('id', existing.id);
-    reacts = reacts.filter(r => r.id !== existing.id);
-    _msgState.feedReactions[sid] = reacts;
-  } else {
-    const { data } = await sb.from('reactions').insert({
-      user_id: user.id, target_id: sid, target_type: 'post', emoji
-    }).select().single();
-    if (!_msgState.feedReactions[sid]) _msgState.feedReactions[sid] = [];
-    if (data) _msgState.feedReactions[sid].push(data);
-  }
-  const postEl = $(`post-${sid}`);
-  const post = _msgState.feed.find(p => String(p.id) === sid);
-  if (postEl && post) {
-    postEl.outerHTML = renderFeedPost(post, _msgState.feedFilter === 'tout' || _msgState.feedFilter === 'panneau');
-  }
-}
+
 function startFeedRealtime() {
   if (_msgState.feedChannel) return;
   _msgState.feedChannel = sb.channel('feed-global')
@@ -1249,6 +1611,7 @@ function startFeedRealtime() {
       if (p.type === 'comment') {
         const parentId = p.reference_id != null ? String(p.reference_id) : '';
         if (!parentId) return;
+
         const isThreadActive = _msgState.activeFeedThreadPostId && String(_msgState.activeFeedThreadPostId) === parentId;
         if (isThreadActive) {
           const { data: prof } = await sb.from('profiles').select('id,prenom,nom,email').eq('id', p.auteur_id).single();
@@ -1256,16 +1619,52 @@ function startFeedRealtime() {
           await appendFeedThreadComment(commentRow);
         } else {
           _msgState.feedCommentUnreadByPost[parentId] = (_msgState.feedCommentUnreadByPost[parentId] || 0) + 1;
-          const ub = $(`feed-unread-${parentId}`);
-          if (ub) { ub.textContent = _msgState.feedCommentUnreadByPost[parentId]; ub.style.display = 'inline-flex'; }
+          renderFeed();
         }
         return;
       }
+      
       if (p.auteur_id === user.id) return;
+      
       const { data: prof } = await sb.from('profiles').select('id,prenom,nom,email').eq('id', p.auteur_id).single();
       const post = { ...p, profiles: prof };
       _msgState.feed = sortFeedPosts([post, ..._msgState.feed.filter(x => x.id !== post.id)]);
+      
+      if (_msgState.activeChanType === 'feed') renderFeed();
+      else if (typeof toast === 'function') toast('🏘️ Nouveau message sur le fil du quartier', 'ok');
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'feed_posts' }, payload => {
+      const p = payload.new;
+      if (p.type === 'comment') return;
+      const idx = _msgState.feed.findIndex(x => x.id === p.id);
+      if (idx >= 0) {
+        const prev = _msgState.feed[idx];
+        _msgState.feed[idx] = { ...prev, ...p, profiles: prev.profiles };
+        _msgState.feed = sortFeedPosts(_msgState.feed);
+        if (_msgState.activeChanType === 'feed') renderFeed();
+      }
+    })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'feed_posts' }, payload => {
+      const id = payload.old?.id;
+      if (!id) return;
+      if (payload.old.type === 'comment' && payload.old.reference_id != null) {
+        const pid = String(payload.old.reference_id);
+        if (_msgState.activeFeedThreadPostId && String(_msgState.activeFeedThreadPostId) === pid) {
+          loadFeedThreadComments(pid, { older: false });
+        }
+        return;
+      }
+      _msgState.feed = _msgState.feed.filter(x => String(x.id) !== String(id));
       if (_msgState.activeChanType === 'feed') renderFeed();
     })
     .subscribe();
+}
+
+async function publishFeedEvent(type, contenu) {
+  const catMap = { ticket: 'pratique', resolved: 'pratique', vote: 'evenements', member: 'vie_quartier' };
+  const categorie = catMap[type] || 'activite';
+  try {
+    const res = await insertFeedPostRowSimple({ auteur_id: user.id, contenu, type, categorie });
+    if (res.error) console.warn('[feed]', res.error.message);
+  } catch (e) { console.warn('[feed]', e.message); }
 }
