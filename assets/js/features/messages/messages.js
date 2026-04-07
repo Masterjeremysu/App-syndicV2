@@ -913,6 +913,16 @@ function insertFeedEmoji(emoji) {
   }
 }
 
+// ─── FILTER ───
+function setFeedFilter(cat) {
+  _msgState.feedFilter = cat;
+  document.querySelectorAll('.feed-cat-chip').forEach(el => {
+    el.classList.toggle('active', el.dataset.cat === cat);
+    el.setAttribute('aria-pressed', el.dataset.cat === cat ? 'true' : 'false');
+  });
+  renderFeed();
+}
+
 // ─── SMART COMPOSER (Formulaires Spécifiques) ────────────────────────────────
 function renderSmartComposerForm(cat) {
   const container = $('smart-compose-fields');
@@ -1619,7 +1629,7 @@ function startFeedRealtime() {
           await appendFeedThreadComment(commentRow);
         } else {
           _msgState.feedCommentUnreadByPost[parentId] = (_msgState.feedCommentUnreadByPost[parentId] || 0) + 1;
-          renderFeed();
+          renderFeed(); // Met à jour le compteur sur la carte
         }
         return;
       }
