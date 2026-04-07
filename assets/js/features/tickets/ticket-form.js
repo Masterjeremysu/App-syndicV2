@@ -11,7 +11,7 @@ const CAT_MAX_URGENCE = {
 
 const TICKET_DRAFT_KEY = 'coprosync_ticket_draft_v1';
 let _ticketDraftBound = false;
-let urgencySelected = 'normal';
+// (Correction : urgencySelected est déjà géré globalement dans state.js)
 let photoFiles = []; // tableau de File objects
 
 function selectCat(el) {
