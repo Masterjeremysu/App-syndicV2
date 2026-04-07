@@ -95,10 +95,20 @@ async function startApp() {
     initPullToRefresh();
     setTimeout(checkOnboarding, 1500);
 
-    setInterval(async () => {
-      const { data } = await sb.from('profiles').select('actif').eq('id', user.id).single();
-      if (data?.actif === false) { await sb.auth.signOut(); location.reload(); }
-    }, 2 * 60 * 1000);
+    // ── Patch Dev Expert : Remplacement du Polling par du Realtime ──
+    sb.channel('profile-status')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
+        async (payload) => {
+          if (payload.new && payload.new.actif === false) {
+            await sb.auth.signOut();
+            location.reload();
+          }
+        }
+      )
+      .subscribe();
+
   } catch (e) {
     err('[startApp] ERREUR:', e);
     showAuthError('Erreur au démarrage de l\'application. Réessayez dans quelques secondes.');

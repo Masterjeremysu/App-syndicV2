@@ -1,4 +1,8 @@
-// ── ANNONCES — filtrage mémoire, visibilité par rôle active, notifications complètes
+// ════════════════════════════════════════════════════════════════
+//  ANNONCES FEATURE
+//  assets/js/features/annonces/annonces.js
+// ════════════════════════════════════════════════════════════════
+
 const ANNONCE_TYPES = {
   urgent:    { label:'🚨 Urgent',    color:'red',    ico:'🚨' },
   important: { label:'⚠️ Important', color:'orange', ico:'⚠️' },
@@ -73,18 +77,40 @@ function toggleAnnonceBody(id) {
   if (!wrap) return;
   const collapsed = wrap.classList.toggle('ann2-body-collapsed');
   if (btn?.classList.contains('ann2-toggle')) {
-    btn.textContent = collapsed ? 'Lire la suite ↓' : 'Réduire ↑';
+    btn.innerHTML = collapsed ? 'Lire la suite ↓' : 'Réduire ↑';
   }
+}
+
+// ── UTILITAIRES UX (Dates relatives & Formatage texte) ──────────────────────
+
+function _formatAnnonceDate(dateString) {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  const now = new Date();
+  const diffTime = now - d;
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0 && now.getDate() === d.getDate()) return "Aujourd'hui";
+  if (diffDays === 1 || (diffDays === 0 && now.getDate() !== d.getDate())) return "Hier";
+  if (diffDays > 1 && diffDays < 7) return `Il y a ${diffDays} jours`;
+  
+  return d.toLocaleDateString('fr-FR', { day:'numeric', month:'long', year:'numeric' });
 }
 
 function annonceContenuBlock(contenu, id) {
   if (!contenu) return '';
-  const esc  = escHtml(contenu);
-  const long = contenu.length > 240;
+  
+  // Amélioration 1 : On sécurise le HTML, MAIS on préserve les sauts de ligne pour aérer le texte
+  const formatText = escHtml(contenu).replace(/\n/g, '<br>');
+  
+  // Amélioration 2 : Coupe si le texte est très long OR s'il a beaucoup de sauts de ligne
+  const lineBreaksCount = (contenu.match(/\n/g) || []).length;
+  const long = contenu.length > 240 || lineBreaksCount > 4;
+  
   return `<div class="${long ? 'ann2-body ann2-body-collapsed' : 'ann2-body'}" id="ann-body-${id}">
-    <div class="ann2-body-inner">${esc}</div>
+    <div class="ann2-body-inner" style="line-height:1.6; padding-top:8px;">${formatText}</div>
   </div>
-  ${long ? `<button type="button" class="btn btn-ghost btn-sm ann2-toggle" onclick="toggleAnnonceBody('${id}')">Lire la suite ↓</button>` : ''}`;
+  ${long ? `<button type="button" class="btn btn-ghost btn-sm ann2-toggle" onclick="toggleAnnonceBody('${id}')" style="margin-top:8px; font-weight:600;">Lire la suite ↓</button>` : ''}`;
 }
 
 // ── RENDER PAGE ─────────────────────────────────────────────────────────────
@@ -128,33 +154,35 @@ async function renderAnnonces() {
         </div>
       </div>
 
-      <div id="annonces-list"><div class="ann2-loading">Chargement…</div></div>
+      <div id="annonces-list"><div class="ann2-loading">Chargement des annonces…</div></div>
     </div>`;
 
   await _loadAnnoncesData();
 }
 
-// ── CHARGEMENT UNIQUE ────────────────────────────────────────────────────────
+// ── CHARGEMENT UNIQUE (Sécurisé avec Try/Catch) ──────────────────────────────
 
 async function _loadAnnoncesData() {
-  const { data, error } = await sb
-    .from('annonces')
-    .select('*, profiles(nom, prenom)')
-    .order('epingle',     { ascending: false })
-    .order('created_at',  { ascending: false });
+  try {
+    const { data, error } = await sb
+      .from('annonces')
+      .select('*, profiles(nom, prenom)')
+      .order('epingle',     { ascending: false })
+      .order('created_at',  { ascending: false });
 
-  if (error) {
-    console.warn('[annonces]', error.message);
+    if (error) throw error; // Passe au catch automatiquement
+
+    _annRawData     = data || [];
+    cache.annonces  = _annRawData;          // met à jour le cache global
+    if (typeof updateBadges === 'function') updateBadges();
+    _updateChipCounts();
+    _renderAnnoncesList();
+
+  } catch (error) {
+    console.error('[annonces] Crash Réseau ou BDD:', error.message);
     const el = $('annonces-list');
-    if (el) el.innerHTML = emptyState('⚠️', 'Erreur de chargement', error.message);
-    return;
+    if (el) el.innerHTML = emptyState('⚠️', 'Problème de connexion', 'Impossible de charger le fil d\'actualité. Veuillez vérifier votre connexion internet.');
   }
-
-  _annRawData     = data || [];
-  cache.annonces  = _annRawData;          // met à jour le cache global
-  if (typeof updateBadges === 'function') updateBadges();
-  _updateChipCounts();
-  _renderAnnoncesList();
 }
 
 // ── FILTRAGE EN MÉMOIRE ──────────────────────────────────────────────────────
@@ -253,10 +281,12 @@ function _renderAnnoncesList() {
 function _renderAnnonceCard(a) {
   const t      = ANNONCE_TYPES[a.type] || ANNONCE_TYPES.info;
   const auteur = a.profiles ? displayName(a.profiles.prenom, a.profiles.nom, null, '—') : '—';
-  const date   = new Date(a.created_at).toLocaleDateString('fr-FR', { day:'numeric', month:'long', year:'numeric' });
+  
+  // Utilisation de la nouvelle fonction pour la date relative
+  const dateStr = _formatAnnonceDate(a.created_at);
   const vis    = annonceVisibilityLabel(a);
 
-  return `<article class="ann2-card ann2-type-${a.type}${a.epingle ? ' ann2-epingle' : ''}${a.brouillon ? ' ann2-is-draft' : ''}">
+  return `<article class="ann2-card ann2-type-${a.type}${a.epingle ? ' ann2-epingle' : ''}${a.brouillon ? ' ann2-is-draft' : ''}" style="animation: fade-in 0.3s ease;">
     <div class="ann2-card-top">
       <div class="ann2-card-ico">${a.epingle ? '📌' : t.ico}</div>
       <div class="ann2-card-main">
@@ -267,14 +297,14 @@ function _renderAnnonceCard(a) {
         <div class="ann2-meta">
           <span>Par ${escHtml(auteur)}</span>
           <span class="ann2-meta-dot">·</span>
-          <span>${date}</span>
+          <span>${dateStr}</span>
           <span class="${vis.cls}">${vis.text}</span>
         </div>
       </div>
     </div>
     ${a.contenu ? annonceContenuBlock(a.contenu, a.id) : ''}
     ${canManageAnnonces() ? `
-    <div class="ann2-actions no-print">
+    <div class="ann2-actions no-print" style="margin-top:16px;">
       <button type="button" class="btn btn-ghost btn-sm" onclick="toggleEpingle('${a.id}',${!a.epingle})">
         ${a.epingle ? '📌 Désépingler' : '📌 Épingler'}
       </button>
@@ -345,8 +375,8 @@ function openNewAnnonce(existing) {
 
     <div class="fg">
       <label class="label">Contenu</label>
-      <textarea id="anc-contenu" class="textarea" rows="6"
-        placeholder="Détails, dates, consignes…">${safeContenu}</textarea>
+      <textarea id="anc-contenu" class="textarea" rows="8"
+        placeholder="Détails, dates, consignes... Les retours à la ligne sont conservés.">${safeContenu}</textarea>
     </div>
 
     <div class="fg" style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;">
@@ -357,7 +387,7 @@ function openNewAnnonce(existing) {
       ${canManageAnnonces() ? `
       <label class="ann2-check" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
         <input type="checkbox" id="anc-brouillon" ${existing?.brouillon ? 'checked' : ''}>
-        <span>📝 Brouillon (invisible résidents)</span>
+        <span>📝 Brouillon (invisible pour les résidents)</span>
       </label>` : ''}
     </div>`;
 
@@ -389,7 +419,7 @@ function openNewAnnonce(existing) {
 
 async function saveAnnonce(id) {
   const titre = $('anc-titre')?.value.trim();
-  if (!titre) { toast('Titre requis', 'err'); return; }
+  if (!titre) { toast('Le titre est requis', 'err'); return; }
 
   const type    = $('anc-type')?.value || 'info';
   const visMode = canManageAnnonces() ? ($('anc-vis-mode')?.value || 'public') : 'public';
@@ -398,7 +428,7 @@ async function saveAnnonce(id) {
   if (visMode === 'roles') {
     visRoles = [...document.querySelectorAll('.anc-role-cb:checked')].map(cb => cb.value);
     if (!visRoles.length) {
-      toast('Choisis au moins un rôle pour une annonce restreinte.', 'warn');
+      toast('Choisissez au moins un rôle pour une annonce restreinte.', 'warn');
       return;
     }
   }
@@ -418,36 +448,36 @@ async function saveAnnonce(id) {
   };
 
   const btn = document.querySelector('#modal-annonce .btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Enregistrement…'; }
 
   let error, data;
-  if (id) {
-    ({ error, data } = await sb.from('annonces').update(payload).eq('id', id).select().single());
-  } else {
-    ({ error, data } = await sb.from('annonces').insert(payload).select().single());
-  }
-
-  if (btn) { btn.disabled = false; btn.textContent = id ? 'Enregistrer' : 'Publier'; }
-
-  if (error) {
-    console.warn('[annonces save]', error);
-    if (error.message?.includes('visibility_mode') || error.message?.includes('column')) {
-      toast('⚠️ Colonnes manquantes en BDD — exécutez migration_annonces.sql dans Supabase.', 'err');
+  try {
+    if (id) {
+      ({ error, data } = await sb.from('annonces').update(payload).eq('id', id).select().single());
     } else {
-      toast('Erreur sauvegarde : ' + error.message, 'err');
+      ({ error, data } = await sb.from('annonces').insert(payload).select().single());
     }
-    return;
-  }
 
-  document.getElementById('modal-annonce')?.remove();
-  toast(id ? 'Annonce modifiée ✓' : 'Annonce publiée ✓', 'ok');
+    if (error) throw error;
 
-  // Recharge les données et re-render
-  await _loadAnnoncesData();
+    document.getElementById('modal-annonce')?.remove();
+    toast(id ? 'Annonce modifiée avec succès ✓' : 'Annonce publiée ✓', 'ok');
 
-  // Notifications uniquement pour les nouvelles annonces publiées
-  if (!id && data && !isBrouillon) {
-    await _notifierNouvelleAnnonce(data, type, titre, visMode, visRoles, payload.contenu);
+    // Recharge les données et re-render
+    await _loadAnnoncesData();
+
+    // Notifications uniquement pour les nouvelles annonces publiées
+    if (!id && data && !isBrouillon) {
+      await _notifierNouvelleAnnonce(data, type, titre, visMode, visRoles, payload.contenu);
+    }
+  } catch (err) {
+    console.error('[annonces save]', err);
+    if (btn) { btn.disabled = false; btn.textContent = id ? 'Enregistrer' : 'Publier'; }
+    if (err.message?.includes('visibility_mode') || err.message?.includes('column')) {
+      toast('⚠️ Base de données incomplète (Schéma Annonces à mettre à jour).', 'err');
+    } else {
+      toast('Erreur de sauvegarde : Vérifiez votre connexion.', 'err');
+    }
   }
 }
 
@@ -456,83 +486,101 @@ async function saveAnnonce(id) {
 async function _notifierNouvelleAnnonce(row, type, titre, visMode, visRoles, contenu) {
   if (!row?.id) return;
 
-  // Construit la liste des rôles cibles
-  const annMeta    = { visibility_mode: visMode, visibility_roles: visRoles, brouillon: false };
-  const targetRoles = new Set(annonceTargetRoles(annMeta));
+  try {
+    // Construit la liste des rôles cibles
+    const annMeta    = { visibility_mode: visMode, visibility_roles: visRoles, brouillon: false };
+    const targetRoles = new Set(annonceTargetRoles(annMeta));
 
-  // Charge tous les utilisateurs actifs en une seule requête
-  const { data: allUsers } = await sb
-    .from('profiles')
-    .select('id, email, role')
-    .eq('actif', true);
+    // Charge tous les utilisateurs actifs en une seule requête
+    const { data: allUsers } = await sb
+      .from('profiles')
+      .select('id, email, role')
+      .eq('actif', true);
 
-  const destinataires = (allUsers || []).filter(u =>
-    u.id !== user.id && targetRoles.has(u.role)
-  );
+    const destinataires = (allUsers || []).filter(u =>
+      u.id !== user.id && targetRoles.has(u.role)
+    );
 
-  if (!destinataires.length) return;
+    if (!destinataires.length) return;
 
-  const subjects = {
-    urgent:    `🚨 Annonce urgente : ${titre}`,
-    important: `⚠️ Annonce importante : ${titre}`,
-    info:      `📢 Nouvelle annonce : ${titre}`,
-  };
+    const subjects = {
+      urgent:    `🚨 Annonce urgente : ${titre}`,
+      important: `⚠️ Annonce importante : ${titre}`,
+      info:      `📢 Nouvelle annonce : ${titre}`,
+    };
 
-  // Notifs in-app
-  const notifs = destinataires.map(u => ({
-    destinataire_id:    u.id,
-    destinataire_email: u.email || '',
-    sujet:              subjects[type] || subjects.info,
-    corps:              contenu || '',
-    type:               type === 'urgent' ? 'urgent' : 'statut_change',
-    reference_id:       row.id,
-    lu:                 false,
-  }));
+    // Notifs in-app
+    const notifs = destinataires.map(u => ({
+      destinataire_id:    u.id,
+      destinataire_email: u.email || '',
+      sujet:              subjects[type] || subjects.info,
+      corps:              contenu || '',
+      type:               type === 'urgent' ? 'urgent' : 'statut_change',
+      reference_id:       row.id,
+      lu:                 false,
+    }));
 
-  const { error: notifErr } = await sb.from('notifications').insert(notifs);
-  if (notifErr) console.warn('[annonces notif]', notifErr.message);
+    const { error: notifErr } = await sb.from('notifications').insert(notifs);
+    if (notifErr) console.warn('[annonces notif]', notifErr.message);
 
-  // Emails — pour urgent et important
-  if (type === 'urgent' || type === 'important') {
-    const emails = destinataires.map(u => u.email).filter(Boolean);
-    if (emails.length) {
-      await sendEmailDirect('nouvelle_annonce', emails, { titre, type, contenu });
+    // Emails — pour urgent et important
+    if (type === 'urgent' || type === 'important') {
+      const emails = destinataires.map(u => u.email).filter(Boolean);
+      if (emails.length && typeof sendEmailDirect === 'function') {
+        await sendEmailDirect('nouvelle_annonce', emails, { titre, type, contenu });
+      }
     }
-  }
 
-  // Push local si urgent
-  if (type === 'urgent') {
-    await pushNotif('🚨 Annonce urgente', titre, 'critique', null);
+    // Push local si urgent
+    if (type === 'urgent' && typeof pushNotif === 'function') {
+      await pushNotif('🚨 Annonce urgente', titre, 'critique', null);
+    }
+  } catch (err) {
+    console.error('Erreur lors de l\'envoi des notifications:', err);
   }
 }
 
 // ── ACTIONS RAPIDES ──────────────────────────────────────────────────────────
 
 async function editAnnonce(annonceId) {
-  const { data } = await sb.from('annonces').select('*').eq('id', annonceId).single();
-  if (data) openNewAnnonce(data);
+  try {
+    const { data, error } = await sb.from('annonces').select('*').eq('id', annonceId).single();
+    if (error) throw error;
+    if (data) openNewAnnonce(data);
+  } catch (err) {
+    toast('Impossible d\'ouvrir l\'annonce pour modification.', 'err');
+  }
 }
 
 async function toggleEpingle(annonceId, val) {
-  const { error } = await sb.from('annonces').update({ epingle: val }).eq('id', annonceId);
-  if (error) { toast('Erreur : ' + error.message, 'err'); return; }
-  // Mise à jour locale sans re-fetch
-  const idx = _annRawData.findIndex(a => a.id === annonceId);
-  if (idx !== -1) _annRawData[idx].epingle = val;
-  _renderAnnoncesList();
-  toast(val ? '📌 Épinglée' : 'Désépinglée', 'ok');
+  try {
+    const { error } = await sb.from('annonces').update({ epingle: val }).eq('id', annonceId);
+    if (error) throw error;
+    
+    // Mise à jour locale sans re-fetch global
+    const idx = _annRawData.findIndex(a => a.id === annonceId);
+    if (idx !== -1) _annRawData[idx].epingle = val;
+    _renderAnnoncesList();
+    toast(val ? '📌 Épinglée' : 'Désépinglée', 'ok');
+  } catch (err) {
+    toast('Erreur lors de la modification : ' + err.message, 'err');
+  }
 }
 
 async function deleteAnnonce(annonceId) {
-  if (!confirm('Supprimer cette annonce ?')) return;
-  const { error } = await sb.from('annonces').delete().eq('id', annonceId);
-  if (error) { toast('Erreur : ' + error.message, 'err'); return; }
-  // Retire du cache local sans re-fetch
-  _annRawData = _annRawData.filter(a => a.id !== annonceId);
-  cache.annonces = _annRawData;
-  _updateChipCounts();
-  _renderAnnoncesList();
-  toast('Annonce supprimée', 'ok');
+  if (!confirm('Êtes-vous sûr de vouloir supprimer définitivement cette annonce ?')) return;
+  
+  try {
+    const { error } = await sb.from('annonces').delete().eq('id', annonceId);
+    if (error) throw error;
+    
+    // Retire du cache local sans re-fetch
+    _annRawData = _annRawData.filter(a => a.id !== annonceId);
+    cache.annonces = _annRawData;
+    _updateChipCounts();
+    _renderAnnoncesList();
+    toast('Annonce supprimée', 'ok');
+  } catch (err) {
+    toast('Erreur lors de la suppression : ' + err.message, 'err');
+  }
 }
-
-// ── AGENDA ──
