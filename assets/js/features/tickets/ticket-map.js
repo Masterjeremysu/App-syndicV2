@@ -5,6 +5,7 @@
 
 let _mapFilters = { urgence: 'all', statut: 'all', batiment: 'all' };
 let _mapViewMode = 'map'; // 'map' ou 'list'
+let _mapInitTimeout = null; // Anti-rebond (Debounce) pour éviter l'erreur Leaflet
 const MAP_PREFS_KEY = 'coprosync_map_prefs_v1';
 
 function loadMapPrefs() {
@@ -52,6 +53,7 @@ function mapMarkerColor(t) {
 function renderMapPage() {
   loadMapPrefs();
   
+  // Cleanup avant de remplacer le DOM
   if (typeof mapInstance !== 'undefined' && mapInstance) { 
     mapInstance.remove(); 
     mapInstance = null; 
@@ -138,7 +140,9 @@ function renderMapPage() {
   if (bat) bat.value = _mapFilters.batiment;
 
   if (_mapViewMode === 'map') {
-    setTimeout(initMap, 100);
+    // Utilisation de l'anti-rebond pour éviter le double appel
+    clearTimeout(_mapInitTimeout);
+    _mapInitTimeout = setTimeout(initMap, 100);
   }
 }
 
@@ -184,40 +188,43 @@ function onMapFilterChange() {
     const el = $('map-list-card');
     if (el) el.innerHTML = `<div style="max-width:800px; margin:0 auto;">${renderMapListHtml()}</div>`;
   } else {
-    initMap(); 
+    // Anti-rebond si l'utilisateur change les filtres très vite
+    clearTimeout(_mapInitTimeout);
+    _mapInitTimeout = setTimeout(initMap, 50);
   }
 }
 
 function setMapViewMode(mode) {
   _mapViewMode = mode === 'list' ? 'list' : 'map';
   saveMapPrefs();
-  renderMapPage(); // L'initialisation est gérée à l'intérieur de renderMapPage
+  renderMapPage(); // Déclenche le timeout propre
 }
 
 function resetMapFilters() {
   _mapFilters = { urgence: 'all', statut: 'all', batiment: 'all' };
   saveMapPrefs();
-  renderMapPage();
+  renderMapPage(); // Déclenche le timeout propre
 }
 
 function initMap() {
-  const mapEl = $('map');
-  if (!mapEl || typeof L === 'undefined') return;
-  
-  // FIX CRITIQUE: Destruction parfaite de l'instance Leaflet
-  if (typeof mapInstance !== 'undefined' && mapInstance) { 
-    mapInstance.remove(); 
-    mapInstance = null; 
-  }
-  // Si le conteneur DOM garde la trace de l'ancien ID, Leaflet plante. On le nettoie :
-  if (mapEl._leaflet_id) {
-    mapEl._leaflet_id = null;
-  }
-
-  const baseLat = (typeof COPRO !== 'undefined' && COPRO.lat) ? COPRO.lat : 45.2;
-  const baseLng = (typeof COPRO !== 'undefined' && COPRO.lng) ? COPRO.lng : 5.7;
-
+  // On utilise requestAnimationFrame pour être sûr que le DOM est complètement peint
   requestAnimationFrame(() => {
+    const mapEl = $('map');
+    if (!mapEl || typeof L === 'undefined') return;
+
+    // FIX ULTIME : Le nettoyage complet de l'instance ET de l'attribut Leaflet 
+    // Doit être exécuté DANS le bloc asynchrone, juste avant l'initialisation
+    if (typeof mapInstance !== 'undefined' && mapInstance) { 
+      mapInstance.remove(); 
+      mapInstance = null; 
+    }
+    if (mapEl._leaflet_id) {
+      mapEl._leaflet_id = null; // Retire le verrou Leaflet
+    }
+
+    const baseLat = (typeof COPRO !== 'undefined' && COPRO.lat) ? COPRO.lat : 45.2;
+    const baseLng = (typeof COPRO !== 'undefined' && COPRO.lng) ? COPRO.lng : 5.7;
+
     try {
       mapInstance = L.map('map', {
         zoomControl: false,
@@ -280,7 +287,9 @@ function initMap() {
 
       setTimeout(() => mapInstance?.invalidateSize({ animate: false }), 200);
 
+      // Gestion propre du ResizeObserver
       if (window.ResizeObserver) {
+        if (mapEl._resizeObserver) mapEl._resizeObserver.disconnect();
         const ro = new ResizeObserver(() => {
           if (mapInstance) mapInstance.invalidateSize({ animate: false });
         });
