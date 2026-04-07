@@ -1,37 +1,23 @@
-// ── PAGE ADMIN : GESTION DES PERMISSIONS ──
-// assets/js/features/permissions/permissions-page.js
+// ════════════════════════════════════════════════════════════════
+//  PAGE ADMIN : GESTION DES PERMISSIONS GRANULAIRES (V2 PRO)
+//  assets/js/features/permissions/permissions-page.js
+// ════════════════════════════════════════════════════════════════
 
 const PERM_ROLES_LIST = ['syndic', 'membre_cs', 'copropriétaire'];
 
 const PERM_ROLE_LABELS = {
-  syndic: 'Syndic',
+  syndic: 'Syndic (Externe)',
   membre_cs: 'Conseil Syndical',
-  'copropriétaire': 'Copropriétaire',
+  'copropriétaire': 'Résident / Copro',
 };
 
-const PERM_ROLE_COLORS = {
-  syndic:           { bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd' },
-  membre_cs:        { bg: '#ffedd5', text: '#c2410c', border: '#fdba74' },
-  'copropriétaire': { bg: '#dcfce7', text: '#166534', border: '#86efac' },
-};
-
-const PERM_MODULE_LABELS = {
-  dashboard:   '🏠 Tableau de bord',
-  tickets:     '🔧 Signalements',
-  map:         '🗺️ Carte',
-  messages:    '💬 Messagerie',
-  annonces:    '📢 Annonces',
-  agenda:      '📅 Agenda',
-  contacts:    '📞 Contacts',
-  faq:         '❓ FAQ',
-  documents:   '📄 Documents',
-  votes:       '🗳️ Votes',
-  rapport:     '📊 Rapport syndic',
-  contrats:    '📋 Contrats',
-  cles:        '🔑 Clés',
-  journal:     '📒 Journal',
-  users:       '👥 Utilisateurs',
-  permissions: '🛡️ Permissions',
+// Actions possibles pour chaque module
+const ACTIONS_META = {
+  view:   { label: 'Voir', ico: '👁️', color: '#6366f1' },
+  create: { label: 'Créer', ico: '➕', color: '#10b981' },
+  edit:   { label: 'Modif', ico: '✏️', color: '#f59e0b' },
+  delete: { label: 'Suppr', ico: '🗑️', color: '#ef4444' },
+  manage: { label: 'Gérer', ico: '⚙️', color: '#7c3aed' }
 };
 
 let _pp = {
@@ -40,395 +26,344 @@ let _pp = {
   rolePerms:  {},
   locks:      {},
   changelog:  [],
-  activeRole: 'syndic',
+  activeRole: 'copropriétaire', // Focus par défaut sur les résidents
   saving:     new Set(),
-  viewAsReal: null,  // profil réel pendant la simulation
+  viewAsReal: null
 };
 
 // ── RENDER PRINCIPAL ─────────────────────────────────────────────
 
 async function renderPermissionsPage() {
-  if (!isAdmin()) { nav(Permissions.getDefaultPage()); return; }
+  if (typeof isAdmin === 'function' && !isAdmin()) { nav('dashboard'); return; }
 
   $('page').innerHTML = `
-  <div style="padding:16px 20px 80px;">
-
-    <!-- En-tête + View As -->
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+  <div class="saas-container" style="padding-bottom: 100px;">
+    
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:20px; margin-bottom:32px; border-bottom:1px solid var(--border); padding-bottom:24px;">
       <div>
-        <h1 style="font-family:var(--font-head);font-size:22px;font-weight:800;letter-spacing:-.3px;margin-bottom:4px;">🛡️ Gestion des permissions</h1>
-        <p style="font-size:13px;color:var(--text-2);margin:0;">Configurez en temps réel ce que chaque rôle peut voir et faire dans CoproSync.</p>
+        <h1 class="saas-page-title">🛡️ Gouvernance & Permissions</h1>
+        <p class="saas-page-sub">Contrôlez finement l'accès aux données pour chaque profil de la copropriété.</p>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <span style="font-size:12px;color:var(--text-3);font-weight:600;white-space:nowrap;">Simuler la vue de :</span>
-        <select id="view-as-select" class="select" style="width:180px;font-size:13px;" onchange="ppSimulateAs(this.value)">
-          <option value="">— Choisir un rôle —</option>
+      
+      <div style="background:var(--bg-2); padding:12px; border-radius:16px; border:1px solid var(--border); display:flex; align-items:center; gap:12px;">
+        <div style="text-align:right;">
+          <div style="font-size:11px; font-weight:800; color:var(--text-3); text-transform:uppercase;">Mode Test</div>
+          <div style="font-size:13px; font-weight:700;">Simuler un profil</div>
+        </div>
+        <select id="view-as-select" class="saas-select" style="width:180px; margin:0;" onchange="ppSimulateAs(this.value)">
+          <option value="">— Choisir —</option>
           ${PERM_ROLES_LIST.map(r => `<option value="${r}">${PERM_ROLE_LABELS[r]}</option>`).join('')}
         </select>
-        <button id="view-as-stop" class="btn btn-danger btn-sm" style="display:none;" onclick="ppStopSimulation()">✕ Arrêter</button>
+        <button id="view-as-stop" class="saas-btn-black" style="display:none; background:var(--red); padding:8px 12px;" onclick="ppStopSimulation()">✕ Quitter</button>
       </div>
     </div>
 
-    <!-- Bannière simulation -->
-    <div id="view-as-banner" style="display:none;margin-bottom:16px;padding:12px 16px;background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--r-md);">
-      <strong>👁️ Mode simulation</strong> — Vous voyez l'application comme un <strong id="view-as-label"></strong>.
-      <div style="font-size:12px;color:var(--text-2);margin-top:4px;">Naviguez librement. Cliquez "Arrêter" pour revenir à votre compte admin.</div>
+    <div id="view-as-banner" style="display:none; margin-bottom:24px; padding:16px; background:var(--orange-light); border:1px solid var(--orange-border); border-radius:12px; animation: pulse 2s infinite;">
+      <div style="display:flex; align-items:center; gap:12px; color:var(--orange);">
+        <span style="font-size:24px;">👁️</span>
+        <div>
+          <div style="font-weight:800; font-size:14px;">SESSION DE SIMULATION ACTIVE</div>
+          <div style="font-size:13px;">Vous naviguez avec les droits d'un <strong><span id="view-as-label"></span></strong>. Les modifications ne sont pas enregistrées.</div>
+        </div>
+      </div>
     </div>
 
-    <!-- Onglets -->
-    <div style="display:flex;border-bottom:1px solid var(--border);margin-bottom:20px;">
-      <button class="pp-tab active" data-tab="matrix" onclick="ppTab('matrix')">Matrice</button>
-      <button class="pp-tab" data-tab="locks" onclick="ppTab('locks')">Verrous d'urgence</button>
-      <button class="pp-tab" data-tab="log" onclick="ppTab('log')">Journal</button>
+    <div style="display:flex; gap:8px; margin-bottom:24px;">
+      <button class="saas-btn-outline pp-tab-btn active" onclick="ppSwitchTab(this, 'matrix')">📊 Matrice des droits</button>
+      <button class="saas-btn-outline pp-tab-btn" onclick="ppSwitchTab(this, 'emergency')">🚨 Verrous d'urgence</button>
+      <button class="saas-btn-outline pp-tab-btn" onclick="ppSwitchTab(this, 'logs')">📜 Historique</button>
     </div>
 
-    <div id="pp-tab-matrix"><div style="text-align:center;padding:40px;color:var(--text-3);">Chargement…</div></div>
-    <div id="pp-tab-locks" style="display:none;"></div>
-    <div id="pp-tab-log"   style="display:none;"></div>
+    <div id="pp-content-matrix">
+       <div style="display:flex; gap:16px; align-items:center; margin-bottom:20px; background:var(--bg-1); padding:12px; border-radius:12px;">
+         <span style="font-size:12px; font-weight:800; color:var(--text-3); text-transform:uppercase;">Rôle à configurer :</span>
+         ${PERM_ROLES_LIST.map(r => `
+            <button class="role-pill ${r === _pp.activeRole ? 'active' : ''}" data-role="${r}" onclick="ppSelectRole('${r}')">
+              ${PERM_ROLE_LABELS[r]}
+            </button>
+         `).join('')}
+       </div>
+       <div id="pp-matrix-grid" class="saas-table-wrap">
+         <div style="padding:40px; text-align:center;"><div class="spinner"></div></div>
+       </div>
+    </div>
+
+    <div id="pp-content-emergency" style="display:none;"></div>
+    <div id="pp-content-logs" style="display:none;"></div>
+
   </div>
 
   <style>
-    .pp-tab{padding:10px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:var(--text-2);border-bottom:2px solid transparent;margin-bottom:-1px;font-family:var(--font-body);transition:color .12s;}
-    .pp-tab.active{color:var(--text);border-bottom-color:var(--text);}
-    .pp-tab:hover{color:var(--text);}
-    .pp-switch{position:relative;width:40px;height:22px;background:var(--border);border-radius:11px;cursor:pointer;border:none;transition:background .18s;flex-shrink:0;}
-    .pp-switch::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .18s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
-    .pp-switch.on{background:var(--green);}
-    .pp-switch.on::after{transform:translateX(18px);}
-    .pp-switch.saving{opacity:.5;pointer-events:none;}
-    .pp-switch.hard{background:var(--border-strong);cursor:not-allowed;opacity:.5;}
-    .pp-mod-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:10px;overflow:hidden;}
-    .pp-mod-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--surface-2);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;}
-    .pp-mod-head:hover{background:var(--bg);}
-    .pp-perm-row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);transition:background .1s;}
-    .pp-perm-row:last-child{border-bottom:none;}
-    .pp-perm-row:hover{background:var(--surface-2);}
-    .pp-action-badge{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:700;background:var(--surface-2);color:var(--text-3);flex-shrink:0;}
-    .pp-lock-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:10px;}
-    .pp-lock-card.locked{border-color:var(--red-border);background:var(--red-light);}
-    .pp-log-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px;}
-    .pp-log-row:last-child{border-bottom:none;}
-  </style>`;
+    .role-pill { background:var(--surface); border:1px solid var(--border); padding:8px 16px; border-radius:20px; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s; color:var(--text-2); }
+    .role-pill.active { background:var(--text-1); color:var(--surface); border-color:var(--text-1); box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+    
+    .pp-tab-btn.active { border-color:var(--primary); color:var(--primary); background:var(--primary-light); }
+    
+    .perm-card { border-bottom:1px solid var(--border); background:var(--surface); }
+    .perm-card-header { padding:16px 20px; background:var(--bg-1); display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+    .perm-card-header:hover { background:var(--bg-2); }
+    
+    .perm-row { display:grid; grid-template-columns: 1fr auto auto; gap:20px; align-items:center; padding:12px 24px; border-bottom:1px solid var(--bg-2); transition:background 0.1s; }
+    .perm-row:last-child { border-bottom:none; }
+    .perm-row:hover { background:var(--bg-1); }
+    
+    .action-tag { font-size:10px; font-weight:800; text-transform:uppercase; padding:2px 8px; border-radius:6px; background:var(--bg-2); color:var(--text-3); }
+    
+    /* Toggle Premium */
+    .p-toggle { width:40px; height:20px; background:var(--border-strong); border-radius:10px; position:relative; cursor:pointer; border:none; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    .p-toggle.on { background:var(--green); }
+    .p-toggle::after { content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:white; transition:transform 0.3s; box-shadow:0 1px 3px rgba(0,0,0,0.2); }
+    .p-toggle.on::after { transform:translateX(20px); }
+    .p-toggle.saving { opacity:0.5; pointer-events:none; }
+  </style>
+  `;
 
-  await _ppLoad();
+  await _ppLoadAll();
   _ppRenderMatrix();
-  _ppRenderLocks();
-  _ppRenderLog();
 }
 
-// ── CHARGEMENT ────────────────────────────────────────────────────
+// ── LOGIQUE DE CHARGEMENT ─────────────────────────────────────────
 
-async function _ppLoad() {
+async function _ppLoadAll() {
   const [catalog, locks, changelog] = await Promise.all([
     Permissions.loadCatalog(),
     Permissions.getRoleLocks(),
-    Permissions.getChangeLog(50),
+    Permissions.getChangeLog(50)
   ]);
-  _pp.catalog   = catalog;
-  _pp.locks     = locks;
+  
+  _pp.catalog = catalog;
+  _pp.locks = locks;
   _pp.changelog = changelog;
-  _pp.byModule  = {};
+  
+  // Groupe par module
+  _pp.byModule = {};
   catalog.forEach(p => {
     if (!_pp.byModule[p.module]) _pp.byModule[p.module] = [];
     _pp.byModule[p.module].push(p);
   });
-  await Promise.all(PERM_ROLES_LIST.map(async r => {
-    _pp.rolePerms[r] = await Permissions.getPermissionsForRole(r);
-  }));
+
+  // Charge les permissions réelles pour le rôle actif
+  _pp.rolePerms[_pp.activeRole] = await Permissions.getPermissionsForRole(_pp.activeRole);
 }
 
-// ── ONGLETS ───────────────────────────────────────────────────────
+// ── NAVIGATION ONGLETS ───────────────────────────────────────────
 
-function ppTab(tab) {
-  document.querySelectorAll('.pp-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-  ['matrix','locks','log'].forEach(t => {
-    const el = document.getElementById('pp-tab-' + t);
-    if (el) el.style.display = t === tab ? '' : 'none';
+function ppSwitchTab(btn, target) {
+  document.querySelectorAll('.pp-tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  
+  ['matrix', 'emergency', 'logs'].forEach(t => {
+    $(`pp-content-${t}`).style.display = (t === target) ? 'block' : 'none';
   });
+  
+  if (target === 'emergency') _ppRenderEmergency();
+  if (target === 'logs') _ppRenderLogs();
 }
 
-// ── MATRICE ──────────────────────────────────────────────────────
-
-function _ppRenderMatrix() {
-  const el = document.getElementById('pp-tab-matrix');
-  if (!el) return;
-  const role = _pp.activeRole;
-  const c    = PERM_ROLE_COLORS[role] || {};
-  const isLocked = _pp.locks[role]?.locked === true;
-
-  el.innerHTML = `
-    <!-- Sélecteur rôle -->
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;align-items:center;">
-      <span style="font-size:12px;color:var(--text-3);font-weight:600;margin-right:4px;">Configurer :</span>
-      ${PERM_ROLES_LIST.map(r => {
-        const rc = PERM_ROLE_COLORS[r];
-        const active = r === role;
-        return `<button style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:6px 14px;border-radius:20px;border:1.5px solid ${active ? rc.border : 'var(--border)'};background:${active ? rc.bg : 'var(--surface)'};color:${active ? rc.text : 'var(--text-2)'};cursor:pointer;" onclick="ppSelectRole('${r}')">${r === role ? '● ' : ''}${PERM_ROLE_LABELS[r]}</button>`;
-      }).join('')}
-    </div>
-
-    ${isLocked ? `
-    <div style="padding:10px 14px;background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--r-md);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-      <span style="font-size:13px;font-weight:700;color:var(--red);">🔒 Ce rôle est verrouillé — toutes les permissions sont suspendues.</span>
-      <button class="btn btn-sm" style="background:var(--green);color:#fff;border:none;" onclick="ppToggleLock('${role}', false)">Déverrouiller</button>
-    </div>` : ''}
-
-    <div id="pp-modules">
-      ${Object.entries(_pp.byModule)
-        .filter(([mod]) => PERM_MODULE_LABELS[mod])
-        .map(([mod, perms]) => _ppModuleCard(mod, perms, role))
-        .join('')}
-    </div>`;
-}
-
-function _ppModuleCard(mod, perms, role) {
-  const granted = perms.filter(p => _pp.rolePerms[role]?.[p.id] === true).length;
-  const rows = perms.map(p => {
-    const isOn      = _pp.rolePerms[role]?.[p.id] === true;
-    const isSaving  = _pp.saving.has(role + ':' + p.id);
-    const isHard    = p.hardcoded === true;
-    const aLabel    = { view: 'Voir', create: 'Créer', edit: 'Modifier', delete: 'Supprimer', read: 'Lire' }[p.action] || p.action;
-    return `
-      <div class="pp-perm-row">
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;color:var(--text);font-weight:500;">${escHtml(p.label)}</div>
-          ${p.description ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px;">${escHtml(p.description)}</div>` : ''}
-        </div>
-        <span class="pp-action-badge">${aLabel}</span>
-        ${isHard
-          ? `<button class="pp-switch hard" title="Système — non modifiable" disabled></button>`
-          : `<button class="pp-switch ${isOn ? 'on' : ''} ${isSaving ? 'saving' : ''}"
-              title="${isOn ? 'Cliquer pour révoquer' : 'Cliquer pour accorder'}"
-              onclick="ppToggle('${role}','${p.id}',${!isOn})"></button>`}
-      </div>`;
-  }).join('');
-
-  return `
-    <div class="pp-mod-card">
-      <div class="pp-mod-head" onclick="ppToggleModule('${mod}')">
-        <div>
-          <div style="font-weight:700;font-size:14px;color:var(--text);">${PERM_MODULE_LABELS[mod] || mod}</div>
-          <div style="font-size:11px;color:var(--text-3);margin-top:2px;">${granted}/${perms.length} permission${perms.length > 1 ? 's' : ''} accordée${granted > 1 ? 's' : ''}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          ${granted === perms.length ? `<span style="font-size:11px;background:var(--green-light);color:var(--green);padding:2px 8px;border-radius:8px;font-weight:700;">Tout accordé</span>` : ''}
-          ${granted === 0 ? `<span style="font-size:11px;background:var(--surface-2);color:var(--text-3);padding:2px 8px;border-radius:8px;font-weight:700;">Tout refusé</span>` : ''}
-          <svg id="pp-chev-${mod}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-3);transition:transform .2s"><polyline points="6,9 12,15 18,9"/></svg>
-        </div>
-      </div>
-      <div id="pp-body-${mod}">${rows}</div>
-    </div>`;
-}
-
-function ppToggleModule(mod) {
-  const body = document.getElementById('pp-body-' + mod);
-  const chev = document.getElementById('pp-chev-' + mod);
-  if (!body) return;
-  const hidden = body.style.display === 'none';
-  body.style.display = hidden ? '' : 'none';
-  if (chev) chev.style.transform = hidden ? '' : 'rotate(-90deg)';
-}
-
-async function ppToggle(role, permId, granted) {
-  const key = role + ':' + permId;
-  _pp.saving.add(key);
-  // Met le switch en état saving
-  document.querySelectorAll('.pp-switch:not(.hard)').forEach(btn => {
-    if (btn.getAttribute('onclick')?.includes("'" + permId + "'") && btn.getAttribute('onclick')?.includes("'" + role + "'")) {
-      btn.classList.add('saving');
-    }
-  });
-
-  const ok = await Permissions.setPermission(role, permId, granted);
-  _pp.saving.delete(key);
-
-  if (ok) {
-    if (!_pp.rolePerms[role]) _pp.rolePerms[role] = {};
-    _pp.rolePerms[role][permId] = granted;
-    // Met à jour le switch sans re-render toute la matrice
-    document.querySelectorAll('.pp-switch:not(.hard)').forEach(btn => {
-      if (btn.getAttribute('onclick')?.includes("'" + permId + "'") && btn.getAttribute('onclick')?.includes("'" + role + "'")) {
-        btn.classList.remove('saving');
-        btn.classList.toggle('on', granted);
-        btn.setAttribute('onclick', "ppToggle('" + role + "','" + permId + "'," + !granted + ")");
-        btn.title = granted ? 'Cliquer pour révoquer' : 'Cliquer pour accorder';
-      }
-    });
-    // Refresh log en arrière-plan
-    Permissions.getChangeLog(50).then(log => { _pp.changelog = log; });
-  } else {
-    // Échec : re-render pour restaurer l'état
-    _ppRenderMatrix();
-  }
-}
+// ── RENDU MATRICE ────────────────────────────────────────────────
 
 function ppSelectRole(role) {
   _pp.activeRole = role;
+  document.querySelectorAll('.role-pill').forEach(p => p.classList.toggle('active', p.dataset.role === role));
   _ppRenderMatrix();
 }
 
-// ── VERROUS ───────────────────────────────────────────────────────
-
-function _ppRenderLocks() {
-  const el = document.getElementById('pp-tab-locks');
-  if (!el) return;
-
-  el.innerHTML = `
-    <div style="margin-bottom:20px;">
-      <h2 style="font-size:16px;font-weight:700;margin-bottom:4px;font-family:var(--font-head);">Master Switch — Verrous d'urgence</h2>
-      <p style="font-size:13px;color:var(--text-2);">Verrouiller un rôle suspend instantanément toutes ses permissions pour les utilisateurs connectés.</p>
-    </div>
-
-    ${PERM_ROLES_LIST.map(role => {
-      const lock = _pp.locks[role] || {};
-      const isLocked = lock.locked === true;
-      return `
-        <div class="pp-lock-card ${isLocked ? 'locked' : ''}">
-          <div style="flex:1;min-width:0;">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:${isLocked ? '6' : '0'}px;">
-              <span style="font-size:14px;font-weight:700;color:var(--text);">${PERM_ROLE_LABELS[role]}</span>
-              ${isLocked ? `<span style="font-size:11px;font-weight:700;background:var(--red);color:#fff;padding:2px 8px;border-radius:8px;">🔒 VERROUILLÉ</span>` : ''}
-            </div>
-            <div style="font-size:12px;color:${isLocked ? 'var(--red)' : 'var(--text-3)'};margin-top:2px;">
-              ${isLocked ? 'Toutes les permissions suspendues.' + (lock.reason ? ' Raison : ' + escHtml(lock.reason) : '') : 'Ce rôle est actif — ses permissions s\'appliquent normalement.'}
-            </div>
-          </div>
-          ${isLocked
-            ? `<button class="btn btn-sm" style="background:var(--green);color:#fff;border:none;" onclick="ppToggleLock('${role}', false)">🔓 Déverrouiller</button>`
-            : `<button class="btn btn-sm btn-danger" onclick="ppToggleLock('${role}', true)">🔒 Verrouiller</button>`}
-        </div>`;
-    }).join('')}
-
-    <div style="margin-top:24px;padding:14px 16px;background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--r-md);">
-      <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:6px;">🚨 Verrouillage global</div>
-      <div style="font-size:12px;color:var(--text-2);margin-bottom:12px;">Verrouille instantanément tous les rôles non-admin. Mode audit ou maintenance d'urgence.</div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-danger" onclick="ppLockAll()">🔒 Verrouiller tout</button>
-        <button class="btn btn-secondary" onclick="ppUnlockAll()">🔓 Tout déverrouiller</button>
-      </div>
-    </div>`;
-}
-
-async function ppToggleLock(role, locked) {
-  let reason = '';
-  if (locked) {
-    reason = (await askTextModal({ title: 'Raison du verrouillage', label: 'Raison (optionnel)', placeholder: 'Ex : Maintenance en cours' })) || '';
+async function _ppRenderMatrix() {
+  const container = $('pp-matrix-grid');
+  const role = _pp.activeRole;
+  
+  // Re-chargement si data non présente
+  if (!_pp.rolePerms[role]) {
+    container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner"></div></div>';
+    _pp.rolePerms[role] = await Permissions.getPermissionsForRole(role);
   }
-  const ok = await Permissions.setRoleLock(role, locked, reason);
-  if (!ok) return;
-  _pp.locks = await Permissions.getRoleLocks();
-  _ppRenderLocks();
-  _ppRenderMatrix();
-  toast(locked ? '🔒 Rôle "' + PERM_ROLE_LABELS[role] + '" verrouillé' : '🔓 Rôle "' + PERM_ROLE_LABELS[role] + '" déverrouillé', locked ? 'warn' : 'ok');
-}
 
-async function ppLockAll() {
-  if (!confirm('Verrouiller TOUS les rôles ? Les utilisateurs ne pourront plus rien faire.')) return;
-  await Promise.all(PERM_ROLES_LIST.map(r => Permissions.setRoleLock(r, true, 'Verrouillage global')));
-  _pp.locks = await Permissions.getRoleLocks();
-  _ppRenderLocks();
-  toast('🔒 Tous les rôles verrouillés', 'warn');
-}
+  const isLocked = _pp.locks[role]?.locked === true;
 
-async function ppUnlockAll() {
-  if (!confirm('Déverrouiller tous les rôles ?')) return;
-  await Promise.all(PERM_ROLES_LIST.map(r => Permissions.setRoleLock(r, false)));
-  _pp.locks = await Permissions.getRoleLocks();
-  _ppRenderLocks();
-  toast('🔓 Tous les rôles déverrouillés', 'ok');
-}
-
-// ── JOURNAL ───────────────────────────────────────────────────────
-
-function _ppRenderLog() {
-  const el = document.getElementById('pp-tab-log');
-  if (!el) return;
-  const log = _pp.changelog;
-  const ACTION_ICO = { granted: '✅', revoked: '❌', role_locked: '🔒', role_unlocked: '🔓' };
-  const ACTION_TXT = { granted: 'Permission accordée', revoked: 'Permission révoquée', role_locked: 'Rôle verrouillé', role_unlocked: 'Rôle déverrouillé' };
-  const permLabel  = id => _pp.catalog.find(p => p.id === id)?.label || id;
-
-  el.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
-      <div>
-        <h2 style="font-size:15px;font-weight:700;font-family:var(--font-head);margin-bottom:2px;">Journal des modifications</h2>
-        <p style="font-size:12px;color:var(--text-3);margin:0;">${log.length} entrée${log.length > 1 ? 's' : ''} — immuable</p>
-      </div>
-      <button class="btn btn-secondary btn-sm" onclick="ppRefreshLog()">Actualiser</button>
+  let html = `
+    <div class="saas-th saas-grid" style="grid-template-columns: 1fr 120px 80px; background:var(--bg-2); border-bottom:1px solid var(--border);">
+      <div style="padding-left:24px;">Fonctionnalité / Permission</div>
+      <div>Action</div>
+      <div style="text-align:center;">Accès</div>
     </div>
-    <div class="pp-mod-card" style="padding:0 16px;">
-      ${!log.length
-        ? `<div style="padding:24px;text-align:center;color:var(--text-3);font-size:13px;">Aucune modification enregistrée.</div>`
-        : log.map(entry => {
-          const rc = PERM_ROLE_COLORS[entry.role] || {};
+  `;
+
+  if (isLocked) {
+    html += `<div style="padding:16px 24px; background:var(--red-light); color:var(--red); font-weight:700; font-size:13px; text-align:center;">⚠️ CE RÔLE EST ACTUELLEMENT VERROUILLÉ : TOUTES LES PERMISSIONS SONT RÉVOQUÉES.</div>`;
+  }
+
+  Object.entries(_pp.byModule).forEach(([modId, perms]) => {
+    const grantedCount = perms.filter(p => _pp.rolePerms[role]?.[p.id]).length;
+    const label = PERM_MODULE_LABELS[modId] || modId;
+
+    html += `
+    <div class="perm-card">
+      <div class="perm-card-header" onclick="ppToggleModuleUI('${modId}')">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-weight:800; font-size:14px; color:var(--text-1);">${label}</span>
+          <span style="font-size:11px; font-weight:700; color:var(--text-3); background:var(--bg-2); padding:2px 8px; border-radius:10px;">${grantedCount} / ${perms.length}</span>
+        </div>
+        <svg id="pp-chev-${modId}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="transition:0.2s;"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div id="pp-body-${modId}" class="perm-card-body">
+        ${perms.map(p => {
+          const isOn = _pp.rolePerms[role]?.[p.id] === true;
+          const meta = ACTIONS_META[p.action] || { label: p.action, ico: '🔹', color: 'var(--text-3)' };
           return `
-            <div class="pp-log-row">
-              <div style="font-size:18px;flex-shrink:0;">${ACTION_ICO[entry.action] || '📝'}</div>
-              <div style="flex:1;min-width:0;">
-                <div style="font-size:12px;font-weight:600;color:var(--text);">
-                  ${ACTION_TXT[entry.action] || entry.action}
-                  ${entry.permission !== '*' ? `<span style="color:var(--text-3);font-weight:400;"> — ${escHtml(permLabel(entry.permission))}</span>` : ''}
-                </div>
-                <div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-                  <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;background:${rc.bg || 'var(--surface-2)'};color:${rc.text || 'var(--text-3)'};">${PERM_ROLE_LABELS[entry.role] || entry.role}</span>
-                  <span style="font-size:11px;color:var(--text-3);">par ${escHtml(entry.admin_nom || 'Admin')}</span>
-                  <span style="font-size:11px;color:var(--text-3);">${fmt(entry.created_at)}</span>
-                </div>
+            <div class="perm-row">
+              <div>
+                <div style="font-size:13.5px; font-weight:700; color:var(--text-1);">${escHtml(p.label)}</div>
+                <div style="font-size:11px; color:var(--text-3); font-weight:500;">${escHtml(p.description || '')}</div>
               </div>
-            </div>`;
+              <div><span class="action-tag" style="border:1px solid ${meta.color}44; color:${meta.color};">${meta.ico} ${meta.label}</span></div>
+              <div style="text-align:center;">
+                <button class="p-toggle ${isOn ? 'on' : ''}" 
+                        onclick="ppTogglePerm('${role}', '${p.id}', ${!isOn})"></button>
+              </div>
+            </div>
+          `;
         }).join('')}
-    </div>`;
+      </div>
+    </div>
+    `;
+  });
+
+  container.innerHTML = html;
 }
 
-async function ppRefreshLog() {
-  _pp.changelog = await Permissions.getChangeLog(50);
-  _ppRenderLog();
+function ppToggleModuleUI(modId) {
+  const body = $(`pp-body-${modId}`);
+  const chev = $(`pp-chev-${modId}`);
+  if (!body) return;
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? 'block' : 'none';
+  if (chev) chev.style.transform = isHidden ? '' : 'rotate(-90deg)';
 }
 
-// ── SIMULATEUR VIEW AS ────────────────────────────────────────────
+async function ppTogglePerm(role, permId, targetState) {
+  // Feedback visuel immédiat
+  const { data: ok } = await Permissions.setPermission(role, permId, targetState);
+  
+  if (ok !== false) {
+    _pp.rolePerms[role][permId] = targetState;
+    _ppRenderMatrix();
+    toast(`Droits mis à jour pour ${PERM_ROLE_LABELS[role]}`, 'ok');
+  } else {
+    toast('Erreur de sauvegarde', 'err');
+  }
+}
+
+// ── EMERGENCY LOCKS ──────────────────────────────────────────────
+
+function _ppRenderEmergency() {
+  const container = $('pp-content-emergency');
+  container.innerHTML = `
+    <div class="saas-table-wrap" style="padding:24px;">
+      <h3 style="font-weight:900; color:var(--red); margin-bottom:12px;">Arrêt d'Urgence par Rôle</h3>
+      <p style="font-size:14px; color:var(--text-2); margin-bottom:24px;">Si vous suspectez un abus ou lors d'une maintenance critique, vous pouvez couper l'accès complet à un rôle. Les utilisateurs de ce rôle ne pourront plus rien voir sauf leur profil.</p>
+      
+      <div style="display:grid; gap:12px;">
+        ${PERM_ROLES_LIST.map(r => {
+          const isL = _pp.locks[r]?.locked;
+          return `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:16px; border:1px solid ${isL ? 'var(--red-border)' : 'var(--border)'}; border-radius:12px; background:${isL ? 'var(--red-light)' : 'var(--surface)'};">
+               <div>
+                 <div style="font-weight:800; font-size:15px; color:${isL ? 'var(--red)' : 'var(--text-1)'};">${PERM_ROLE_LABELS[r]}</div>
+                 <div style="font-size:12px; color:var(--text-3);">${isL ? '🚫 ACCÈS SUSPENDU' : '✅ Accès opérationnel'}</div>
+               </div>
+               <button class="saas-btn-primary" style="background:${isL ? 'var(--green)' : 'var(--red)'}; color:white;" onclick="ppToggleRoleLock('${r}', ${!isL})">
+                 ${isL ? '🔓 Rétablir l\'accès' : '🔒 Verrouiller le rôle'}
+               </button>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+async function ppToggleRoleLock(role, locked) {
+  let reason = '';
+  if (locked) reason = prompt('Raison du verrouillage (sera affichée aux résidents) :') || 'Maintenance';
+  
+  const ok = await Permissions.setRoleLock(role, locked, reason);
+  if (ok) {
+    _pp.locks[role] = { locked };
+    _ppRenderEmergency();
+    _ppRenderMatrix();
+    toast('Verrouillage mis à jour', 'warn');
+  }
+}
+
+// ── SIMULATION "VIEW AS" ────────────────────────────────────────
 
 async function ppSimulateAs(role) {
   if (!role) { ppStopSimulation(); return; }
 
-  // Sauvegarde du vrai profil
+  // Sauvegarde des vrais accès admin
   if (!_pp.viewAsReal) _pp.viewAsReal = { ...profile };
 
-  // Modification temporaire du profil en mémoire
-  profile = { ..._pp.viewAsReal, role };
+  // Injection forcée du rôle simulé dans le profil global
+  profile = { ..._pp.viewAsReal, role: role };
 
-  // Rechargement des permissions pour ce rôle
+  // Re-déclenchement du moteur de permissions
   await Permissions.load();
-  initUI();
+  
+  // Re-initialisation de l'UI (Masque la sidebar, change les menus)
+  if (typeof initUI === 'function') initUI();
 
-  // Affichage bannière
-  document.getElementById('view-as-banner').style.display = '';
-  document.getElementById('view-as-label').textContent  = PERM_ROLE_LABELS[role] || role;
-  document.getElementById('view-as-stop').style.display = '';
+  // Interface de simulation
+  $('view-as-banner').style.display = 'block';
+  $('view-as-label').textContent = PERM_ROLE_LABELS[role].toUpperCase();
+  $('view-as-stop').style.display = 'flex';
+  $('view-as-select').value = role;
 
-  // Navigation vers la page par défaut du rôle simulé
+  toast(`Simulation active : Profil ${PERM_ROLE_LABELS[role]}`, 'warn');
+  
+  // Navigation automatique vers la page d'accueil autorisée du rôle
   nav(Permissions.getDefaultPage());
-  toast('👁️ Simulation : vous voyez l\'app comme "' + (PERM_ROLE_LABELS[role] || role) + '"', 'warn');
 }
 
 async function ppStopSimulation() {
   if (!_pp.viewAsReal) return;
 
-  // Restauration du vrai profil
+  // Rétablissement du compte admin
   profile = { ..._pp.viewAsReal };
   _pp.viewAsReal = null;
 
-  // Rechargement des vraies permissions (admin)
   await Permissions.load();
-  initUI();
+  if (typeof initUI === 'function') initUI();
 
-  // Nettoyage UI
-  const banner = document.getElementById('view-as-banner');
-  const select = document.getElementById('view-as-select');
-  const stop   = document.getElementById('view-as-stop');
-  if (banner) banner.style.display = 'none';
-  if (select) select.value = '';
-  if (stop)   stop.style.display = 'none';
+  $('view-as-banner').style.display = 'none';
+  $('view-as-stop').style.display = 'none';
+  $('view-as-select').value = '';
 
   nav('permissions');
-  toast('✓ Simulation arrêtée — retour à votre compte admin', 'ok');
+  toast('Retour au mode Administrateur', 'ok');
+}
+
+// ── JOURNAL D'AUDIT ──────────────────────────────────────────────
+
+async function _ppRenderLogs() {
+  const container = $('pp-content-logs');
+  const logs = await Permissions.getChangeLog(50);
+  
+  container.innerHTML = `
+    <div class="saas-table-wrap">
+      <div class="saas-th saas-grid" style="grid-template-columns: 100px 1fr 180px 140px;">
+        <div style="padding-left:24px;">Action</div>
+        <div>Cible</div>
+        <div>Auteur</div>
+        <div style="text-align:right; padding-right:24px;">Date</div>
+      </div>
+      ${logs.map(l => `
+        <div class="saas-grid" style="grid-template-columns: 100px 1fr 180px 140px; padding:12px 24px; font-size:12px; border-bottom:1px solid var(--bg-2);">
+          <div style="font-weight:800; color:${l.action === 'granted' ? 'var(--green)' : 'var(--red)'};">${l.action.toUpperCase()}</div>
+          <div style="color:var(--text-1); font-weight:600;">${l.permission} <span style="color:var(--text-3); font-weight:400;">pour ${l.role}</span></div>
+          <div style="color:var(--text-2); font-weight:700;">${l.admin_nom}</div>
+          <div style="text-align:right; color:var(--text-3);">${fmt(l.created_at)}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
