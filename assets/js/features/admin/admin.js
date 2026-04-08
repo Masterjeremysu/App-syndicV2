@@ -20,6 +20,9 @@ function adminModuleCatalog() {
     { key: 'journal', label: 'Journal', description: 'Audit des actions.', adminOnly: false },
     { key: 'users', label: 'Utilisateurs', description: 'Profils et comptes.', adminOnly: true },
     { key: 'rapport', label: 'Rapport syndic', description: 'Suivi avec le syndic.', adminOnly: false },
+    { key: 'journal', label: 'Journal', description: 'Audit des actions.', adminOnly: false },
+    { key: 'registre', label: 'Registre', description: 'Suivi des interventions et prestataires.', adminOnly: false }, 
+    { key: 'users', label: 'Utilisateurs', description: 'Profils et comptes.', adminOnly: true },
     { key: 'admin', label: 'Sécurité & Accès', description: 'Gouvernance globale.', adminOnly: true }
   ];
 }
