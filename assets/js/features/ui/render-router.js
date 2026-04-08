@@ -91,6 +91,15 @@ function renderPage(p) {
       renderRapport();
       break;
 
+      case 'registre': // <-- AJOUTE CE BLOC
+      if (typeof renderRegistre === 'function') {
+        renderRegistre();
+      } else {
+        console.error("Module registre.js non chargé");
+        renderDashboard();
+      }
+      break;
+
     // --- SECTION ADMINISTRATION ---
     case 'admin': 
       // FIX CRITIQUE : Route pour "Admin Accès"
