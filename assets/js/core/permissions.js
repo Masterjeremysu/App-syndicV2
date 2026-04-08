@@ -28,7 +28,8 @@ window.Permissions = (function () {
     cles:        ['cles'],
     journal:     ['journal'],
     users:       ['users'],
-    admin:       ['admin'], // <--- AJOUTÉ : Route Admin Accès
+    admin:       ['admin'],
+    registre:    ['registre'],
     permissions: ['permissions'],
   };
 
