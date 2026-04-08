@@ -52,7 +52,7 @@ function getAdminRoleTemplate(role) {
     },
     membre_cs: {
       role: 'membre_cs', label: 'Conseil Syndical', level: 'Pilotage opérationnel',
-      modules: ['dashboard', 'tickets', 'map', 'messages', 'annonces', 'agenda', 'contacts', 'documents', 'votes', 'contrats', 'cles', 'journal', 'rapport'],
+      modules: ['dashboard', 'tickets', 'map', 'messages', 'annonces', 'agenda', 'contacts', 'documents', 'votes', 'contrats', 'cles', 'journal','registre', 'rapport'],
       capabilities: ['Gérer les incidents', 'Piloter les contrats', 'Diffuser des annonces'],
       badgeColor: 'var(--blue, #3b82f6)', bgLight: 'var(--blue-light, #eff6ff)'
     },
