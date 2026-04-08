@@ -114,7 +114,7 @@ window.Permissions = (function () {
         'dashboard','tickets','map','messages',
         'annonces','agenda','contacts','faq','documents','votes',
         'rapport','contrats','cles','journal','users','permissions',
-        'profile','notifications','admin' // <--- AJOUTÉ ICI AUSSI
+        'profile','notifications','admin', 'registre' // <--- AJOUTÉ ICI AUSSI
       ];
     }
 
