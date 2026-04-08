@@ -1,17 +1,17 @@
 // ════════════════════════════════════════════════════════════════
-//  ANNONCES FEATURE (SaaS Premium UI + Rich Text + Archives)
+//  ANNONCES FEATURE (SaaS Premium UI + Global Search)
 //  assets/js/features/annonces/annonces.js
 // ════════════════════════════════════════════════════════════════
 
 const ANNONCE_TYPES = {
-  urgent:    { label:'🚨 Urgent',    color:'var(--red)',     bg:'var(--red-light)',     border:'var(--red-border)', ico:'🚨' },
-  important: { label:'⚠️ Important', color:'var(--orange)',  bg:'var(--orange-light)',  border:'var(--orange-border)', ico:'⚠️' },
-  info:      { label:'ℹ️ Info',      color:'var(--primary)', bg:'var(--primary-light)', border:'var(--primary-border)', ico:'📢' },
+  urgent:    { label:'URGENT',    color:'var(--red)',     bg:'transparent', border:'var(--red)' },
+  important: { label:'IMPORTANT', color:'var(--orange)',  bg:'transparent', border:'var(--orange)' },
+  info:      { label:'INFO',      color:'var(--primary)', bg:'transparent', border:'var(--primary)' },
 };
 
 const ROLE_LABELS = {
-  copropriétaire: 'Copropriétaires',
-  membre_cs:      'Conseil syndical',
+  copropriétaire: 'Résidents',
+  membre_cs:      'Conseil Syndical',
   syndic:         'Syndic',
   administrateur: 'Administrateurs',
 };
@@ -22,97 +22,91 @@ let _annSearch     = '';
 let _annRawData    = [];      
 let _annDebounce   = null;    
 
-// ── CSS PREMIUM ─────────────────────────────────────────────────────────────
+// ── CSS PREMIUM (Adaptatif Light/Dark) ───────────────────────────────────────
 (function injectAnnoncesCSS() {
   if (document.getElementById('saas-annonces-css')) return;
   const s = document.createElement('style');
   s.id = 'saas-annonces-css';
   s.textContent = `
-    .anc-container { padding: 32px 40px; max-width: 900px; margin: 0 auto; animation: fade-in 0.3s ease; }
+    .anc-container { padding: 32px 40px; max-width: 1000px; margin: 0 auto; animation: fade-in 0.3s ease; }
     
-    .anc-tabs { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
-    .anc-tab { padding: 8px 16px; font-size: 14px; font-weight: 700; color: var(--text-3); background: transparent; border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
-    .anc-tab:hover { color: var(--text-1); background: var(--bg-2); }
-    .anc-tab.active { color: var(--text-1); background: var(--surface); box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid var(--border); }
+    .anc-page-title { font-family: var(--font-head); font-size: 32px; font-weight: 900; letter-spacing: -1px; color: var(--text-1); margin: 0 0 8px 0; }
+    .anc-page-sub { font-size: 14px; color: var(--text-3); font-weight: 500; margin: 0; }
     
-    .anc-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; background: var(--bg-1); padding: 8px; border-radius: 12px; border: 1px solid var(--border); }
+    /* Tabs & Toolbar */
+    .anc-tabs { display: flex; gap: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+    .anc-tab { padding: 0 0 12px 0; font-size: 14px; font-weight: 700; color: var(--text-3); background: transparent; border: none; border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.2s; margin-bottom: -1px; }
+    .anc-tab:hover { color: var(--text-1); }
+    .anc-tab.active { color: var(--text-1); border-bottom-color: var(--text-1); }
+    
+    .anc-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 32px; }
+    
     .anc-chips { display: flex; gap: 8px; flex-wrap: wrap; }
-    .anc-chip { padding: 6px 12px; font-size: 12px; font-weight: 700; border-radius: 20px; border: 1px solid transparent; background: transparent; color: var(--text-2); cursor: pointer; transition: all 0.2s; }
-    .anc-chip:hover { background: var(--bg-2); }
-    .anc-chip.active { background: var(--text-1); color: var(--surface); box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    .anc-chip { padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); cursor: pointer; transition: all 0.2s; }
+    .anc-chip:hover { border-color: var(--text-3); color: var(--text-1); }
+    .anc-chip.active { background: var(--text-1); color: var(--surface); border-color: var(--text-1); }
     
-    .anc-search { min-width: 250px; border: none; background: var(--surface); padding: 8px 16px 8px 36px; border-radius: 20px; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .anc-search-wrap { position: relative; min-width: 280px; }
+    .anc-search-wrap svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-3); }
+    .anc-search { width: 100%; border: 1px solid var(--border); background: var(--surface); padding: 10px 16px 10px 40px; border-radius: 8px; font-size: 13.5px; color: var(--text-1); transition: all 0.2s; outline: none; }
+    .anc-search:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
     
-    .anc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.02); overflow: hidden; transition: transform 0.2s; }
-    .anc-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.04); }
+    /* Cards */
+    .anc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); transition: border-color 0.2s; position: relative; overflow: hidden; }
+    .anc-card:hover { border-color: var(--border-strong); }
     .anc-card.pinned { border-color: var(--orange-border); }
-    .anc-card.pinned::before { content: ''; display: block; height: 4px; background: linear-gradient(90deg, var(--orange), #fbbf24); }
-    .anc-card.archived { opacity: 0.7; filter: grayscale(40%); }
+    .anc-card.pinned::after { content: ''; position: absolute; top: 0; right: 0; border-width: 0 40px 40px 0; border-style: solid; border-color: transparent var(--orange-light) transparent transparent; pointer-events: none; }
+    .anc-card.pinned::before { content: '📌'; position: absolute; top: 6px; right: 8px; font-size: 12px; z-index: 1; pointer-events: none; }
+    .anc-card.archived { opacity: 0.6; filter: grayscale(80%); }
     
-    .anc-header { padding: 20px 24px; display: flex; gap: 16px; align-items: flex-start; }
-    .anc-av { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; color: white; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .anc-header { padding: 20px 24px; display: flex; gap: 16px; align-items: flex-start; border-bottom: 1px solid var(--bg-2); }
+    .anc-av { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900; color: white; flex-shrink: 0; }
     
-    .anc-title { font-family: var(--font-head); font-size: 20px; font-weight: 800; color: var(--text-1); margin: 0 0 6px 0; line-height: 1.2; }
-    .anc-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-3); font-weight: 500; flex-wrap: wrap; }
+    .anc-title { font-family: var(--font-head); font-size: 18px; font-weight: 800; color: var(--text-1); margin: 0 0 8px 0; line-height: 1.3; }
+    .anc-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-3); font-weight: 600; flex-wrap: wrap; }
     
-    .anc-body { padding: 0 24px 20px; font-size: 15px; line-height: 1.7; color: var(--text-2); position: relative; }
-    .anc-body-content { max-height: 200px; overflow: hidden; position: relative; transition: max-height 0.3s ease; }
-    .anc-body-content.expanded { max-height: 2000px; }
+    .anc-badge { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 20px; border: 1px solid currentColor; }
+    
+    .anc-body { padding: 20px 24px; font-size: 14.5px; line-height: 1.6; color: var(--text-2); }
+    .anc-body-content { max-height: 150px; overflow: hidden; position: relative; transition: max-height 0.3s ease; }
+    .anc-body-content.expanded { max-height: 3000px; }
     .anc-fade { position: absolute; bottom: 0; left: 0; right: 0; height: 60px; background: linear-gradient(to bottom, transparent, var(--surface)); pointer-events: none; }
     .anc-body-content.expanded .anc-fade { display: none; }
     
-    .anc-footer { padding: 12px 24px; border-top: 1px solid var(--border); background: var(--bg-1); display: flex; justify-content: flex-end; gap: 8px; }
+    .anc-footer { padding: 12px 24px; background: var(--bg-1); border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px; }
     
     /* Rich Text Render */
-    .rt-content h3 { font-size: 18px; font-weight: 800; color: var(--text-1); margin: 16px 0 8px; }
-    .rt-content h4 { font-size: 15px; font-weight: 800; color: var(--text-1); margin: 14px 0 6px; }
+    .rt-content h3 { font-size: 16px; font-weight: 800; color: var(--text-1); margin: 16px 0 8px; }
+    .rt-content h4 { font-size: 14px; font-weight: 800; color: var(--text-1); margin: 14px 0 6px; }
     .rt-content p { margin: 0 0 12px 0; }
     .rt-content ul { margin: 0 0 12px 20px; padding: 0; }
-    .rt-content li { margin-bottom: 4px; }
-    .rt-content strong { color: var(--text-1); font-weight: 700; }
+    .rt-content li { margin-bottom: 6px; }
+    .rt-content strong { color: var(--text-1); font-weight: 800; }
     
     /* Toolbar Modal */
-    .md-toolbar { display: flex; gap: 4px; padding: 8px; background: var(--bg-2); border: 1px solid var(--border); border-bottom: none; border-radius: 12px 12px 0 0; }
-    .md-btn { background: transparent; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--text-2); font-size: 13px; font-weight: 700; }
-    .md-btn:hover { background: var(--surface); color: var(--text-1); }
+    .md-toolbar { display: flex; gap: 4px; padding: 8px; background: var(--bg-2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; }
+    .md-btn { background: transparent; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--text-2); font-size: 13px; font-weight: 700; transition: all 0.15s; }
+    .md-btn:hover { background: var(--surface); color: var(--text-1); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 
     @media (max-width: 768px) {
-      .anc-container { padding: 16px; }
-      .anc-header { padding: 16px; }
-      .anc-body { padding: 0 16px 16px; }
+      .anc-container { padding: 20px 16px; }
+      .anc-header { padding: 16px; flex-direction: column; gap: 12px; }
+      .anc-body { padding: 16px; }
+      .anc-search-wrap { width: 100%; }
     }
   `;
   document.head.appendChild(s);
 })();
 
-// ── VISIBILITÉ ──────────────────────────────────────────────────────────────
-
-function onAnnonceVisModeChange() {
-  const mode = $('anc-vis-mode')?.value;
-  const box  = $('anc-vis-roles');
-  if (box) box.style.display = mode === 'roles' ? 'block' : 'none';
-}
-
-function annonceVisPreset(preset) {
-  const mode = $('anc-vis-mode');
-  if (mode) mode.value = 'roles';
-  onAnnonceVisModeChange();
-  document.querySelectorAll('.anc-role-cb').forEach(cb => { cb.checked = false; });
-  const map = {
-    gestion:   ['membre_cs', 'syndic', 'administrateur'],
-    residents: ['copropriétaire'],
-    tous_roles: ['copropriétaire', 'membre_cs', 'syndic', 'administrateur'],
-  };
-  (map[preset] || []).forEach(r => {
-    const cb = document.querySelector(`.anc-role-cb[value="${r}"]`);
-    if (cb) cb.checked = true;
-  });
-}
-
 // ── FILTRES UI ──────────────────────────────────────────────────────────────
 
 function setAnnoncesTab(tab) {
   _annTab = tab;
+  // Si on change d'onglet, on vide la recherche pour éviter la confusion
+  _annSearch = ''; 
+  const searchInput = $('ann-inline-search');
+  if (searchInput) searchInput.value = '';
+
   document.querySelectorAll('.anc-tab').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-ann-tab') === tab);
   });
@@ -129,20 +123,27 @@ function setAnnoncesFilter(f) {
 
 function setAnnoncesSearch(val) {
   _annSearch = (val || '').trim().toLowerCase();
+  
+  // Si on fait une recherche, on désactive visuellement les onglets (car la recherche est globale)
+  if (_annSearch.length > 0) {
+    document.querySelectorAll('.anc-tab').forEach(btn => btn.style.opacity = '0.5');
+  } else {
+    document.querySelectorAll('.anc-tab').forEach(btn => btn.style.opacity = '1');
+  }
+
   clearTimeout(_annDebounce);
-  _annDebounce = setTimeout(_renderAnnoncesList, 200);
+  _annDebounce = setTimeout(_renderAnnoncesList, 250);
 }
 
 function toggleAnnonceBody(id) {
   const content = $('ann-content-' + id);
   const btn = $('ann-btn-' + id);
   if (!content) return;
-  
   const isExpanded = content.classList.toggle('expanded');
   if (btn) btn.innerHTML = isExpanded ? 'Réduire l\'annonce ↑' : 'Lire la suite ↓';
 }
 
-// ── FORMATAGE TEXTE RICHE (Markdown Léger) ──────────────────────────────────
+// ── FORMATAGE TEXTE RICHE & DATES ───────────────────────────────────────────
 
 function formatRichText(text) {
   if (!text) return '';
@@ -152,8 +153,7 @@ function formatRichText(text) {
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
   html = html.replace(/^- (.*$)/gim, '<ul><li>$1</li></ul>');
-  // Clean up adjacent uls
-  html = html.replace(/<\/ul>\n<ul>/g, '\n');
+  html = html.replace(/<\/ul>\n<ul>/g, '\n'); // Fusionne les listes
   html = html.replace(/\n/g, '<br>');
   return html;
 }
@@ -165,7 +165,6 @@ function insertMD(prefix, suffix) {
   const end = ta.selectionEnd;
   const text = ta.value;
   const selectedText = text.substring(start, end);
-  
   ta.value = text.substring(0, start) + prefix + selectedText + suffix + text.substring(end);
   ta.focus();
   if (!selectedText) ta.selectionEnd = start + prefix.length;
@@ -198,12 +197,12 @@ async function renderAnnonces() {
       
       <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px; margin-bottom:32px;">
         <div>
-          <h1 style="font-family:var(--font-head); font-size:32px; font-weight:900; letter-spacing:-1px; color:var(--text-1); margin:0 0 8px 0;">Panneau d'affichage</h1>
-          <p style="font-size:15px; color:var(--text-3); font-weight:500; margin:0;">Informations et communications officielles de la résidence.</p>
+          <h1 class="anc-page-title">Panneau d'affichage</h1>
+          <p class="anc-page-sub">Informations et communications officielles de la résidence.</p>
         </div>
         ${isManagerUser ? `
-          <button type="button" class="btn btn-primary" style="box-shadow:0 4px 12px rgba(59,130,246,0.3); font-weight:800;" onclick="openNewAnnonce()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <button type="button" class="btn btn-primary" style="font-weight:800;" onclick="openNewAnnonce()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:6px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Rédiger une annonce
           </button>
         ` : ''}
@@ -224,9 +223,9 @@ async function renderAnnonces() {
           <button type="button" class="anc-chip" data-ann-filter="important" onclick="setAnnoncesFilter('important')">⚠️ Importantes</button>
           <button type="button" class="anc-chip" data-ann-filter="info" onclick="setAnnoncesFilter('info')">ℹ️ Infos</button>
         </div>
-        <div style="position:relative;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-3); pointer-events:none;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="search" class="anc-search" id="ann-inline-search" placeholder="Rechercher..." oninput="setAnnoncesSearch(this.value)">
+        <div class="anc-search-wrap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="search" class="anc-search" id="ann-inline-search" placeholder="Rechercher une annonce..." oninput="setAnnoncesSearch(this.value)">
         </div>
       </div>
 
@@ -238,7 +237,7 @@ async function renderAnnonces() {
   await _loadAnnoncesData();
 }
 
-// ── CHARGEMENT ──────────────────────────────────────────────────────────────
+// ── CHARGEMENT & FILTRES ────────────────────────────────────────────────────
 
 async function _loadAnnoncesData() {
   try {
@@ -255,43 +254,44 @@ async function _loadAnnoncesData() {
     if (typeof updateBadges === 'function') updateBadges();
     _updateChipCounts();
     _renderAnnoncesList();
-
   } catch (error) {
-    console.error('[annonces] Crash:', error.message);
-    const el = $('annonces-list');
-    if (el) el.innerHTML = `<div style="padding:40px; text-align:center; color:var(--red);">Impossible de charger les annonces. Vérifiez votre connexion.</div>`;
+    console.error('[annonces]', error.message);
+    $('annonces-list').innerHTML = `<div style="padding:40px; text-align:center; color:var(--red); font-weight:700;">Impossible de charger les annonces.</div>`;
   }
 }
-
-// ── FILTRAGE ────────────────────────────────────────────────────────────────
 
 function _annoncesApplyFilters() {
   const isManagerUser = typeof canManageAnnonces === 'function' ? canManageAnnonces() : false;
   
   let out = _annRawData.filter(a => typeof annonceReaderCanSee === 'function' ? annonceReaderCanSee(a) : true);
 
-  if (isManagerUser) {
-    if (_annTab === 'brouillon') {
-      out = out.filter(a => a.brouillon === true);
-    } else if (_annTab === 'archive') {
-      // Supporte la colonne archive boolean, ou le statut
-      out = out.filter(a => a.archive === true || a.statut === 'archive');
-    } else {
-      out = out.filter(a => !a.brouillon && !a.archive && a.statut !== 'archive');
-    }
+  // RECHERCHE GLOBALE : Si texte tapé, on cherche partout (sauf brouillons pour les non-managers)
+  if (_annSearch) {
+    const s = _annSearch;
+    out = out.filter(a => 
+      ((a.titre||'').toLowerCase().includes(s) || (a.contenu||'').toLowerCase().includes(s)) &&
+      (isManagerUser || !a.brouillon) // Un résident ne trouve pas les brouillons via la recherche
+    );
   } else {
-    // Résident : voit public, non brouillon, non archivé
-    out = out.filter(a => !a.brouillon && !a.archive && a.statut !== 'archive');
+    // FILTRES D'ONGLETS NORMAUX (Seulement si aucune recherche)
+    if (isManagerUser) {
+      if (_annTab === 'brouillon') {
+        out = out.filter(a => a.brouillon === true);
+      } else if (_annTab === 'archive') {
+        out = out.filter(a => a.archive === true);
+      } else {
+        out = out.filter(a => !a.brouillon && !a.archive);
+      }
+    } else {
+      out = out.filter(a => !a.brouillon && !a.archive);
+    }
   }
 
+  // Filtres par Tags (Urgent, etc.)
   if (_annFilter === 'epingle') out = out.filter(a => a.epingle);
   else if (_annFilter !== 'all') out = out.filter(a => a.type === _annFilter);
 
-  if (_annSearch) {
-    const s = _annSearch;
-    out = out.filter(a => (a.titre||'').toLowerCase().includes(s) || (a.contenu||'').toLowerCase().includes(s));
-  }
-
+  // Tri
   out.sort((a, b) => {
     if (a.epingle !== b.epingle) return a.epingle ? -1 : 1;
     return new Date(b.created_at) - new Date(a.created_at);
@@ -301,12 +301,7 @@ function _annoncesApplyFilters() {
 }
 
 function _updateChipCounts() {
-  const isManagerUser = typeof canManageAnnonces === 'function' ? canManageAnnonces() : false;
-  const base = _annRawData.filter(a => 
-    (typeof annonceReaderCanSee === 'function' ? annonceReaderCanSee(a) : true) && 
-    !a.brouillon && !a.archive && a.statut !== 'archive'
-  );
-  
+  const base = _annRawData.filter(a => (typeof annonceReaderCanSee === 'function' ? annonceReaderCanSee(a) : true) && !a.brouillon && !a.archive);
   const counts = {
     all:       base.length,
     epingle:   base.filter(a => a.epingle).length,
@@ -322,7 +317,7 @@ function _updateChipCounts() {
     if (!badge) {
       badge = document.createElement('span');
       badge.className = 'ann-chip-count';
-      badge.style.cssText = 'font-size:10.5px; opacity:0.7; margin-left:4px; font-weight:800;';
+      badge.style.cssText = 'margin-left:6px; opacity:0.6;';
       btn.appendChild(badge);
     }
     badge.textContent = cnt > 0 ? cnt : '';
@@ -339,50 +334,48 @@ function _renderAnnoncesList() {
   const isManagerUser = typeof canManageAnnonces === 'function' ? canManageAnnonces() : false;
 
   if (!list.length) {
-    const msgMap = {
-      publie: "Aucune annonce officielle publiée pour le moment.",
-      brouillon: "Vous n'avez aucun brouillon en attente.",
-      archive: "Les archives sont vides."
-    };
-    el.innerHTML = `<div style="padding:80px 20px; text-align:center; background:var(--surface); border:1px dashed var(--border); border-radius:16px;">
-      <div style="font-size:40px; margin-bottom:16px; opacity:0.5;">📭</div>
-      <div style="font-size:16px; font-weight:700; color:var(--text-1); margin-bottom:8px;">${_annSearch ? 'Aucun résultat trouvé' : 'Rien à afficher'}</div>
-      <div style="font-size:14px; color:var(--text-3); max-width:300px; margin:0 auto;">${_annSearch ? 'Essayez de modifier votre recherche.' : msgMap[_annTab] || ''}</div>
-    </div>`;
+    el.innerHTML = `
+      <div style="padding:60px 20px; text-align:center; background:var(--surface); border:1px solid var(--border); border-radius:16px;">
+        <div style="font-size:32px; margin-bottom:12px; opacity:0.6;">📭</div>
+        <div style="font-size:16px; font-weight:800; color:var(--text-1); margin-bottom:6px;">${_annSearch ? 'Aucun résultat trouvé' : 'Rien à afficher'}</div>
+        <div style="font-size:13.5px; color:var(--text-3);">${_annSearch ? 'Votre recherche n\'a donné aucun résultat, même dans les archives.' : 'Aucune annonce dans cette section.'}</div>
+      </div>`;
     return;
   }
 
   el.innerHTML = list.map(a => {
     const t = ANNONCE_TYPES[a.type] || ANNONCE_TYPES.info;
-    const auteur = a.profiles ? displayName(a.profiles.prenom, a.profiles.nom, null, 'Le Syndic') : 'Le Syndic';
+    const auteur = a.profiles ? (a.profiles.prenom || a.profiles.nom || 'Le Syndic') : 'Le Syndic';
     const dateStr = _formatAnnonceDate(a.created_at);
-    const visText = typeof annonceVisibilityLabel === 'function' ? annonceVisibilityLabel(a).text : (a.visibility_mode === 'roles' ? 'Restreint' : 'Public');
     
-    // Avatar color based on author name
+    let visText = 'Public';
+    if (a.visibility_mode === 'roles') {
+      visText = (a.visibility_roles || []).map(r => ROLE_LABELS[r] || r).join(', ');
+    }
+
     let h = 0; for (let i = 0; i < auteur.length; i++) h = auteur.charCodeAt(i) + ((h << 5) - h);
     const colors = ['#2563eb','#7c3aed','#ea580c','#16a34a','#0891b2'];
     const avColor = colors[Math.abs(h) % colors.length];
 
-    // Rich text logic
     const htmlContent = formatRichText(a.contenu);
-    const isLong = (a.contenu || '').length > 300 || (a.contenu?.match(/\n/g) || []).length > 5;
+    const isLong = (a.contenu || '').length > 250 || (a.contenu?.match(/\n/g) || []).length > 4;
 
     return `
-    <article class="anc-card ${a.epingle ? 'pinned' : ''} ${a.archive || a.statut==='archive' ? 'archived' : ''}">
+    <article class="anc-card ${a.epingle ? 'pinned' : ''} ${a.archive ? 'archived' : ''}">
       <div class="anc-header">
         <div class="anc-av" style="background:${avColor};">${auteur.charAt(0).toUpperCase()}</div>
         <div style="flex:1; min-width:0;">
           <h2 class="anc-title">${escHtml(a.titre)}</h2>
           <div class="anc-meta">
-            <span style="color:${t.color}; font-weight:800; background:${t.bg}; padding:2px 8px; border-radius:6px; border:1px solid ${t.border};">${t.label}</span>
+            <span class="anc-badge" style="color:${t.color};">${t.label}</span>
             <span style="color:var(--border-strong);">·</span>
             <span>${escHtml(auteur)}</span>
             <span style="color:var(--border-strong);">·</span>
             <span>${dateStr}</span>
-            ${isManagerUser && visText !== 'Public' ? `<span style="background:var(--bg-2); padding:2px 8px; border-radius:6px; font-weight:700;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>${visText}</span>` : ''}
+            ${isManagerUser && a.visibility_mode === 'roles' ? `<span style="color:var(--text-3); font-weight:700;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-2px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Restreint (${visText})</span>` : ''}
+            ${_annSearch && a.archive ? `<span class="anc-badge" style="color:var(--orange);">ARCHIVÉE</span>` : ''}
           </div>
         </div>
-        ${a.epingle ? `<div style="font-size:24px;" title="Épinglée">📌</div>` : ''}
       </div>
       
       ${a.contenu ? `
@@ -391,13 +384,13 @@ function _renderAnnoncesList() {
             ${htmlContent}
             ${isLong ? `<div class="anc-fade"></div>` : ''}
           </div>
-          ${isLong ? `<button id="ann-btn-${a.id}" class="btn btn-ghost btn-sm" style="margin-top:12px; padding:0; color:var(--primary); font-weight:700;" onclick="toggleAnnonceBody('${a.id}')">Lire la suite ↓</button>` : ''}
+          ${isLong ? `<button id="ann-btn-${a.id}" class="btn btn-ghost btn-sm" style="margin-top:12px; padding:0; color:var(--text-1); font-weight:800;" onclick="toggleAnnonceBody('${a.id}')">Lire la suite ↓</button>` : ''}
         </div>
       ` : ''}
 
       ${isManagerUser ? `
         <div class="anc-footer">
-          ${!a.archive && a.statut !== 'archive' ? `
+          ${!a.archive ? `
             <button class="btn btn-ghost btn-sm" onclick="toggleEpingle('${a.id}', ${!a.epingle})">${a.epingle ? 'Désépingler' : '📌 Épingler'}</button>
             <button class="btn btn-ghost btn-sm" onclick="editAnnonce('${a.id}')">✏️ Modifier</button>
             <button class="btn btn-ghost btn-sm" style="color:var(--orange);" onclick="toggleArchive('${a.id}', true)">📦 Archiver</button>
@@ -413,15 +406,31 @@ function _renderAnnoncesList() {
 
 // ── MODAL CRÉATION / ÉDITION ─────────────────────────────────────────────────
 
+function onAnnonceVisModeChange() {
+  const mode = $('anc-vis-mode')?.value;
+  const box  = $('anc-vis-roles');
+  if (box) box.style.display = mode === 'roles' ? 'block' : 'none';
+}
+
+function annonceVisPreset(preset) {
+  $('anc-vis-mode').value = 'roles';
+  onAnnonceVisModeChange();
+  document.querySelectorAll('.anc-role-cb').forEach(cb => cb.checked = false);
+  const map = { gestion: ['membre_cs', 'syndic', 'administrateur'], residents: ['copropriétaire'] };
+  (map[preset] || []).forEach(r => {
+    const cb = document.querySelector(`.anc-role-cb[value="${r}"]`);
+    if (cb) cb.checked = true;
+  });
+}
+
 function openNewAnnonce(existing) {
   const isEdit  = !!existing;
   const mode    = existing?.visibility_mode || 'public';
-  const roles   = typeof normalizeAnnonceRoles === 'function' ? normalizeAnnonceRoles(existing?.visibility_roles) : [];
-  const isManagerUser = typeof canManageAnnonces === 'function' ? canManageAnnonces() : false;
-
+  const roles   = existing?.visibility_roles || [];
+  
   const roleChecks = ['copropriétaire', 'membre_cs', 'syndic', 'administrateur'].map(r =>
     `<label style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; cursor:pointer;">
-      <input type="checkbox" class="anc-role-cb" value="${r}" ${roles.includes(r) ? 'checked' : ''} style="width:16px; height:16px; accent-color:var(--primary);">
+      <input type="checkbox" class="anc-role-cb" value="${r}" ${roles.includes(r) ? 'checked' : ''} style="width:16px; height:16px;">
       <span>${ROLE_LABELS[r] || r}</span>
     </label>`
   ).join('');
@@ -432,7 +441,7 @@ function openNewAnnonce(existing) {
   const html = `
     <div class="fg">
       <label class="label" style="font-weight:800;">Titre de l'annonce *</label>
-      <input type="text" id="anc-titre" class="input" placeholder="Ex: Nettoyage annuel des parkings" value="${safeTitre}" style="font-size:16px; font-weight:700;">
+      <input type="text" id="anc-titre" class="input" placeholder="Ex: Nettoyage annuel des parkings" value="${safeTitre}" style="font-size:15px; font-weight:700;">
     </div>
 
     <div class="fg-row">
@@ -442,25 +451,23 @@ function openNewAnnonce(existing) {
           ${Object.entries(ANNONCE_TYPES).map(([k,v]) => `<option value="${k}" ${existing?.type === k ? 'selected' : ''}>${v.label}</option>`).join('')}
         </select>
       </div>
-      ${isManagerUser ? `
       <div class="fg" style="margin:0;flex:1;">
         <label class="label">Visibilité</label>
         <select id="anc-vis-mode" class="select" style="width:100%;" onchange="onAnnonceVisModeChange()">
           <option value="public" ${mode === 'public' ? 'selected' : ''}>👥 Toute la résidence</option>
           <option value="roles"  ${mode === 'roles'  ? 'selected' : ''}>🔒 Rôles spécifiques…</option>
         </select>
-      </div>` : ''}
+      </div>
     </div>
 
-    ${isManagerUser ? `
-    <div class="fg" id="anc-vis-roles" style="display:${mode === 'roles' ? 'block' : 'none'}; background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;">
+    <div class="fg" id="anc-vis-roles" style="display:${mode === 'roles' ? 'block' : 'none'}; background:var(--bg-2); border:1px solid var(--border); border-radius:10px; padding:16px;">
       <label class="label">Accès restreint aux rôles suivants :</label>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">${roleChecks}</div>
       <div style="display:flex; gap:8px; border-top:1px solid var(--border); padding-top:12px;">
-        <button type="button" class="btn btn-ghost btn-sm" style="background:white;" onclick="annonceVisPreset('gestion')">Équipe Gestion</button>
-        <button type="button" class="btn btn-ghost btn-sm" style="background:white;" onclick="annonceVisPreset('residents')">Résidents seuls</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="background:var(--surface);" onclick="annonceVisPreset('gestion')">Équipe Gestion</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="background:var(--surface);" onclick="annonceVisPreset('residents')">Résidents seuls</button>
       </div>
-    </div>` : ''}
+    </div>
 
     <div class="fg">
       <label class="label">Contenu du message</label>
@@ -471,35 +478,34 @@ function openNewAnnonce(existing) {
         <div style="width:1px; background:var(--border); margin:0 4px;"></div>
         <button type="button" class="md-btn" onclick="insertMD('- ', '')" title="Liste">● Liste</button>
       </div>
-      <textarea id="anc-contenu" class="input" rows="8" placeholder="Détails, dates, consignes... Le formatage sera conservé." style="border-radius:0 0 12px 12px; border-top:none; resize:vertical;">${safeContenu}</textarea>
+      <textarea id="anc-contenu" class="input" rows="8" placeholder="Détails, dates, consignes... Le formatage sera conservé." style="border-radius:0 0 8px 8px; border-top:none; resize:vertical; font-family:inherit;">${safeContenu}</textarea>
     </div>
 
-    <div class="fg" style="background:var(--bg-2); padding:16px; border-radius:12px; border:1px solid var(--border); display:flex; flex-direction:column; gap:12px;">
+    <div class="fg" style="background:var(--surface); padding:16px; border-radius:10px; border:1px solid var(--border); display:flex; flex-direction:column; gap:12px;">
       <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:13.5px; font-weight:600; color:var(--text-1);">
-        <input type="checkbox" id="anc-epingle" ${existing?.epingle ? 'checked' : ''} style="width:18px; height:18px; accent-color:var(--orange);">
-        <span>📌 Mettre en avant (Épingler en haut)</span>
+        <input type="checkbox" id="anc-epingle" ${existing?.epingle ? 'checked' : ''} style="width:16px; height:16px;">
+        <span>📌 Épingler en haut du fil d'actualité</span>
       </label>
-      ${isManagerUser ? `
       <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:13.5px; font-weight:600; color:var(--text-1);">
-        <input type="checkbox" id="anc-brouillon" ${existing?.brouillon ? 'checked' : ''} style="width:18px; height:18px; accent-color:var(--primary);">
-        <span>📝 Enregistrer comme brouillon (Invisible)</span>
-      </label>` : ''}
+        <input type="checkbox" id="anc-brouillon" ${existing?.brouillon ? 'checked' : ''} style="width:16px; height:16px;">
+        <span>📝 Enregistrer comme brouillon (Invisible pour les résidents)</span>
+      </label>
     </div>`;
 
   const overlay = document.createElement('div');
   overlay.className = 'overlay open';
   overlay.id = 'modal-annonce';
   overlay.innerHTML = `
-    <div class="modal" style="max-width:600px; border-radius:20px;">
-      <div class="mh" style="padding:20px 24px; border-bottom:1px solid var(--border);">
-        <span class="mh-title" style="font-size:20px; font-weight:900;">${isEdit ? "Modifier l'annonce" : 'Créer une annonce'}</span>
+    <div class="modal" style="max-width:600px; border-radius:16px;">
+      <div class="mh" style="padding:20px 24px; border-bottom:1px solid var(--border); background:var(--bg-1);">
+        <span class="mh-title" style="font-size:20px; font-weight:900; color:var(--text-1);">${isEdit ? "Modifier l'annonce" : 'Créer une annonce'}</span>
         <button type="button" class="mclose" style="font-size:24px;" onclick="document.getElementById('modal-annonce')?.remove()">×</button>
       </div>
       <div class="mb" style="padding:24px;">${html}</div>
-      <div class="mf" style="padding:16px 24px; background:var(--bg-1); border-top:1px solid var(--border);">
-        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-annonce')?.remove()">Annuler</button>
-        <button type="button" class="btn btn-primary" style="padding:10px 24px; font-size:14px; box-shadow:0 4px 12px rgba(59,130,246,0.3);" onclick="saveAnnonce('${existing?.id || ''}')">
-          ${isEdit ? '💾 Mettre à jour' : '🚀 Publier'}
+      <div class="mf" style="padding:16px 24px; border-top:1px solid var(--border);">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-annonce')?.remove()">Annuler</button>
+        <button type="button" class="btn btn-primary" style="padding:10px 24px; box-shadow:0 4px 12px rgba(0,0,0,0.1);" onclick="saveAnnonce('${existing?.id || ''}')">
+          ${isEdit ? 'Enregistrer' : 'Publier'}
         </button>
       </div>
     </div>`;
@@ -515,16 +521,15 @@ async function saveAnnonce(id) {
   if (!titre) { toast('Le titre est requis', 'err'); return; }
 
   const type    = $('anc-type')?.value || 'info';
-  const isManagerUser = typeof canManageAnnonces === 'function' ? canManageAnnonces() : false;
-  const visMode = isManagerUser ? ($('anc-vis-mode')?.value || 'public') : 'public';
-
+  const visMode = $('anc-vis-mode')?.value || 'public';
   let visRoles = [];
+  
   if (visMode === 'roles') {
     visRoles = [...document.querySelectorAll('.anc-role-cb:checked')].map(cb => cb.value);
     if (!visRoles.length) { toast('Choisissez au moins un rôle.', 'warn'); return; }
   }
 
-  const isBrouillon = isManagerUser ? ($('anc-brouillon')?.checked || false) : false;
+  const isBrouillon = $('anc-brouillon')?.checked || false;
 
   const payload = {
     titre,
@@ -560,7 +565,6 @@ async function saveAnnonce(id) {
       await _notifierNouvelleAnnonce(data, type, titre, visMode, visRoles, payload.contenu);
     }
   } catch (err) {
-    console.error('[annonces]', err);
     if (btn) { btn.disabled = false; btn.textContent = id ? 'Mettre à jour' : 'Publier'; }
     toast('Erreur lors de la sauvegarde.', 'err');
   }
@@ -571,7 +575,7 @@ async function editAnnonce(annonceId) {
     const { data, error } = await sb.from('annonces').select('*').eq('id', annonceId).single();
     if (error) throw error;
     if (data) openNewAnnonce(data);
-  } catch (err) { toast('Erreur ouverture annonce', 'err'); }
+  } catch (err) { toast('Erreur d\'ouverture', 'err'); }
 }
 
 async function toggleEpingle(annonceId, val) {
@@ -586,25 +590,16 @@ async function toggleEpingle(annonceId, val) {
 
 async function toggleArchive(annonceId, isArchived) {
   try {
-    // Si ta base de données utilise un statut au lieu d'un boolean, on peut adapter. 
-    // Ici on tente d'utiliser une colonne "archive" ou "statut".
-    // On met 'archive' à true, et on retire l'épingle automatiquement.
-    const updatePayload = { epingle: false };
-    
-    // Tente de mettre à jour le champ "archive" (boolean) OU "statut" (string)
-    // On utilise un try/catch silencieux si la colonne n'existe pas.
-    const { error } = await sb.from('annonces').update({ archive: isArchived, statut: isArchived ? 'archive' : 'publie', epingle: false }).eq('id', annonceId);
+    const { error } = await sb.from('annonces').update({ archive: isArchived, epingle: false }).eq('id', annonceId);
     
     if (error) {
-       // Fallback si la colonne "archive" n'existe pas encore dans ta DB
-       toast('⚠️ La colonne "archive" ou "statut" manque dans votre base de données Supabase.', 'warn');
+       toast('⚠️ La colonne "archive" manque dans votre base de données Supabase. Veuillez l\'ajouter (BOOLEAN).', 'warn');
        return;
     }
 
     const idx = _annRawData.findIndex(a => a.id === annonceId);
     if (idx !== -1) {
       _annRawData[idx].archive = isArchived;
-      _annRawData[idx].statut = isArchived ? 'archive' : 'publie';
       _annRawData[idx].epingle = false;
     }
     
