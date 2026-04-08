@@ -248,34 +248,55 @@ function _renderPrestataires() {
 
 // ── LOGIQUE : AFFICHE QR CODE (Impression) ───────────────────────────────────
 
-function openQrUniversal() {
-  // Génération d'un SVG stylisé pour imiter un QR Code
-  const qrSvg = `
-    <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="100" height="100" rx="10" fill="#111827"/>
-      <path d="M20 20H40V40H20V20ZM25 25V35H35V25H25Z" fill="white"/>
-      <path d="M60 20H80V40H60V20ZM65 25V35H75V25H65Z" fill="white"/>
-      <path d="M20 60H40V80H20V60ZM25 65V75H35V25H25Z" fill="white"/>
-      <rect x="50" y="20" width="5" height="5" fill="white"/>
-      <rect x="50" y="30" width="5" height="10" fill="white"/>
-      <rect x="60" y="50" width="20" height="5" fill="white"/>
-      <rect x="60" y="60" width="5" height="20" fill="white"/>
-      <rect x="75" y="60" width="5" height="5" fill="white"/>
-      <rect x="70" y="70" width="10" height="10" fill="white"/>
-      <rect x="20" y="50" width="30" height="5" fill="white"/>
-      <rect x="45" y="60" width="5" height="20" fill="white"/>
-    </svg>`;
+// ── LOGIQUE : GESTION & IMPRESSION DU QR CODE (Vrai Tech) ──────────────────────
 
-  const printArea = $('print-area');
-  if (printArea) {
-    printArea.innerHTML = `
-      <div class="print-title">POINTAGE PRESTATAIRES</div>
-      <div class="print-sub">Veuillez scanner ce QR Code à votre <strong>arrivée</strong> et à votre <strong>départ</strong>.</div>
-      ${qrSvg}
-      <div class="print-foot">Propulsé par CoproSync</div>
-    `;
-    window.print(); // Ouvre la fenêtre d'impression native du navigateur
-  }
+function openQrUniversal() {
+  // 1. On construit l'URL exacte vers laquelle le QR Code doit pointer.
+  // Plus tard, tu pourras créer la page "?p=pointage_externe" pour les prestataires.
+  const pointageUrl = window.location.origin + window.location.pathname + '?p=pointage_externe';
+  
+  // 2. On utilise l'API qrserver pour générer un vrai QR Code dynamique
+  const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(pointageUrl)}&color=000000&bgcolor=ffffff&margin=10`;
+
+  const html = `
+    <div style="text-align:center; margin-bottom:24px; color:var(--text-2); font-size:14px; line-height:1.6;">
+      Imprimez cette affiche et placez-la dans la loge ou le hall. Les prestataires pourront scanner ce vrai QR Code avec leur téléphone pour badger, sans avoir besoin de compte.
+    </div>
+    
+    <div class="qr-box" style="background: #ffffff; padding: 32px; border-radius: 20px; text-align: center; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.08); margin: 0 auto; max-width: 320px;">
+      <img src="${qrApiUrl}" alt="QR Code Pointage" style="width: 220px; height: 220px; margin: 0 auto; display: block; border-radius: 8px;">
+      
+      <div style="margin-top:24px; font-family:var(--font-head); font-weight:900; font-size:22px; color:#111827; letter-spacing: -0.5px;">Pointage CoproSync</div>
+      <div style="font-size:13px; color:#6b7280; font-weight: 500; margin-top:4px;">Résidence Les Jardins</div>
+    </div>
+  `;
+
+  // On affiche la modale avec le bouton d'impression
+  _showModal('Affiche QR Code Universel', html, '🖨️ Imprimer l\'affiche', () => {
+    
+    // 3. Logique d'impression : On injecte le QR Code dans la zone d'impression
+    const printArea = $('print-area');
+    if (printArea) {
+      printArea.innerHTML = `
+        <div style="text-align:center; padding: 60px 40px; font-family: sans-serif;">
+          <h1 style="font-family:'Syne', sans-serif; font-size:54px; font-weight:900; margin-bottom:16px; color:#000; letter-spacing: -1px; text-transform: uppercase;">Pointage Prestataires</h1>
+          <p style="font-size:22px; color:#374151; margin-bottom:80px; font-weight: 500;">
+            Veuillez scanner ce QR Code à votre <strong>arrivée</strong> et à votre <strong>départ</strong>.
+          </p>
+          
+          <img src="${qrApiUrl}" style="width: 450px; height: 450px; display:block; margin:0 auto 60px;">
+          
+          <div style="font-family:'Syne', sans-serif; font-weight:900; font-size:36px; color:#000;">Propulsé par CoproSync</div>
+          <div style="font-size:18px; color:#6b7280; margin-top:12px;">Résidence Les Jardins</div>
+        </div>
+      `;
+      
+      // On attend 500ms pour laisser le temps à l'image de charger avant d'ouvrir la fenêtre d'impression
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    }
+  });
 }
 
 // ── LOGIQUE : QUICK VIEW CONTRAT ──────────────────────────────────────────────
