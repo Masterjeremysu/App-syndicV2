@@ -945,36 +945,86 @@ function _modal(title,bodyHtml,btnText,onConfirm,opts={}) {
 }
 
 // ── PAGE SCAN PUBLIQUE ────────────────────────────────────────────────────────
-// ── PAGE SCAN PUBLIQUE ────────────────────────────────────────────────────────
-
 async function renderScanPage(token) {
-  const page=document.getElementById('page'); if(!page)return;
-  page.innerHTML=`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f9fafb">${_ico('spin',32)}</div>`;
-  let zone=null;
-  try{zone=await dbGetZoneByToken(token);}catch(e){}
-  if(!zone){
-    page.innerHTML=`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui;background:#f9fafb"><div style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:16px">⚠️</div><div style="font-size:22px;font-weight:800;margin-bottom:8px;color:#111">QR Code invalide</div><div style="font-size:15px;color:#6b7280">Ce code ne correspond à aucune zone.</div></div></div>`;return;
-  }
-  const existing=(zone.passages||[]).find(p=>p.status==='en_cours');
-  const type=existing?'depart':'arrivee';
-  const color=type==='arrivee'?'#22C55E':'#EF4444';
-  const label=type==='arrivee'?'Enregistrer mon arrivée':'Enregistrer mon départ';
-  page.innerHTML=`<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f9fafb;font-family:-apple-system,sans-serif;padding:24px">
-    <div style="background:white;border-radius:24px;padding:36px 28px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.1);text-align:center">
-      <div style="width:64px;height:64px;border-radius:18px;background:${color}20;border:2px solid ${color}30;margin:0 auto 20px;display:flex;align-items:center;justify-content:center">${_ico(zone.icone||'qr',28).replace(/currentColor/g,color)}</div>
-      <div style="font-size:13px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">CoproSync · Pointage</div>
-      <div style="font-size:22px;font-weight:900;color:#111827;margin-bottom:4px">${_esc(zone.nom)}</div>
-      <div style="font-size:14px;color:#6b7280;margin-bottom:28px">${type==='arrivee'?'Aucun passage en cours.':existing?`Passage en cours · arrivée à ${_regFmt(existing.arrivee)}`:''}</div>
-      <div style="margin-bottom:20px;text-align:left">
-        <label style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;display:block;margin-bottom:8px">Votre nom</label>
-        <input id="scan-nom" style="width:100%;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;padding:12px 16px;font-size:16px;font-weight:600;color:#111;outline:none;box-sizing:border-box" placeholder="Prénom NOM">
-      </div>
-      <button id="scan-btn" onclick="_handleScan('${zone.id}','${type}','${zone.copro_id||''}')" style="width:100%;padding:16px;background:${color};color:white;border:none;border-radius:14px;font-size:17px;font-weight:900;cursor:pointer;box-shadow:0 8px 24px ${color}44">${label}</button>
-      <div style="margin-top:16px;font-size:11px;color:#d1d5db">Aucun compte requis · Données sécurisées</div>
-    </div>
-  </div>`;
-}
+  const page = document.getElementById('page'); if (!page) return;
+  
+  // 🔒 SÉCURITÉ : On tue les menus de l'app pour le prestataire
+  const styleLock = document.createElement('style');
+  styleLock.innerHTML = `
+    #bottom-nav, #sidebar, #topbar, .main-nav { display: none !important; }
+    body { padding-bottom: 0 !important; background: #f9fafb !important; }
+    #page { margin: 0 !important; width: 100vw !important; height: 100vh !important; }
+  `;
+  document.head.appendChild(styleLock);
 
+  page.innerHTML = `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;">${_ico('spin', 32)}</div>`;
+
+  try {
+    // 1. On récupère la zone ET le nom du prestataire lié (jointure simple)
+    const { data: zone, error } = await sb
+      .from('zones')
+      .select(`
+        *,
+        prestataires ( nom, couleur )
+      `)
+      .eq('qr_token', token)
+      .single();
+
+    if (error || !zone) throw new Error("Zone introuvable");
+
+    const prestataire = zone.prestataires || { nom: 'Prestataire Externe', couleur: '#6b7280' };
+    const existing = (zone.passages || []).find(p => p.status === 'en_cours');
+    const type = existing ? 'depart' : 'arrivee';
+    const color = type === 'arrivee' ? '#22C55E' : '#EF4444';
+    const label = type === 'arrivee' ? 'Enregistrer mon arrivée' : 'Enregistrer mon départ';
+
+    // 2. L'Interface Stylisée "Mission"
+    page.innerHTML = `
+      <div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; font-family:-apple-system, sans-serif;">
+        <div style="background:white; border-radius:28px; padding:40px 30px; max-width:400px; width:100%; box-shadow:0 25px 50px -12px rgba(0,0,0,0.1); text-align:center; border:1px solid #f1f5f9;">
+          
+          <div style="display:inline-flex; align-items:center; gap:8px; background:${prestataire.couleur}10; color:${prestataire.couleur}; padding:6px 14px; border-radius:100px; font-size:12px; font-weight:800; margin-bottom:20px; border:1px solid ${prestataire.couleur}20;">
+            <span style="width:8px; height:8px; background:${prestataire.couleur}; border-radius:50%;"></span>
+            ${prestataire.nom.toUpperCase()}
+          </div>
+
+          <div style="width:72px; height:72px; border-radius:22px; background:${color}10; margin:0 auto 24px; display:flex; align-items:center; justify-content:center; color:${color}">
+            ${_ico(zone.icone || 'qr', 32)}
+          </div>
+
+          <h1 style="font-size:24px; font-weight:900; color:#1e293b; margin:0 0 8px;">${_esc(zone.nom)}</h1>
+          <p style="font-size:15px; color:#64748b; margin-bottom:32px;">
+            ${type === 'arrivee' ? 'Scannez pour débuter votre mission.' : `En cours depuis ${_regSince(existing.arrivee)}`}
+          </p>
+
+          <div style="margin-bottom:24px; text-align:left;">
+            <label style="font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.1em; margin-left:4px; margin-bottom:8px; display:block;">Votre Prénom</label>
+            <input id="scan-nom" type="text" focus 
+              style="width:100%; background:#f8fafc; border:2px solid #e2e8f0; border-radius:16px; padding:16px; font-size:16px; font-weight:600; outline:none; transition:border-color 0.2s;" 
+              placeholder="Ex: Suzet"
+              onfocus="this.style.borderColor='${color}'">
+          </div>
+
+          <button id="scan-btn" onclick="_handleScan('${zone.id}', '${type}', '${zone.copro_id}')"
+            style="width:100%; padding:20px; background:${color}; color:white; border:none; border-radius:18px; font-size:17px; font-weight:800; cursor:pointer; box-shadow:0 10px 20px -5px ${color}60; transition:transform 0.1s;"
+            onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1)'">
+            ${label}
+          </button>
+
+          <p style="margin-top:24px; font-size:12px; color:#cbd5e1; font-weight:500;">
+            Sécurisé par CoproSync · Mode Prestataire
+          </p>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    page.innerHTML = `<div style="padding:40px; text-align:center; font-family:sans-serif;">
+      <div style="font-size:50px;">⚠️</div>
+      <h2 style="margin:20px 0 10px;">Accès non autorisé</h2>
+      <p style="color:#64748b;">${e.message}</p>
+    </div>`;
+  }
+}
 async function _handleScan(zoneId, type, coproId) {
   const nomIntervenant = document.getElementById('scan-nom').value;
   const btn = document.getElementById('scan-btn');
