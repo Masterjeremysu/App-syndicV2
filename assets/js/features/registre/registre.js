@@ -4,7 +4,7 @@
 //
 //  DÉPENDANCES : registre-data.js doit être chargé AVANT ce fichier
 //  CLIENT      : variable globale `sb` (Supabase createClient)
-//  COPRO ID    : window._currentCoproId  ← à définir dans ton app au login
+//  COPRO ID    : lié au profile global ou window._currentCoproId
 // ════════════════════════════════════════════════════════════════════════════
 
 let _regTab       = 'historique';
@@ -165,9 +165,25 @@ let _missionCounter = 10;
 
 // ── UTILITAIRES ───────────────────────────────────────────────────────────────
 
+// Sécurise l'affichage DOM contre les failles XSS (cross-site scripting)
+function _esc(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function _coproId() {
+  // 🔥 FIX CRITIQUE: Priorité au profil chargé
+  if (typeof profile !== 'undefined' && profile && profile.copro_id) {
+    return profile.copro_id;
+  }
   return window._currentCoproId || window.COPRO_ID || null;
 }
+
 function _regZoneLoc(id)  { return _regZones.find(z => z.id === id); }
 function _regPrestaLoc(id){ return _regPrestas.find(p => p.id === id); }
 function _regFmt(iso) {
@@ -274,7 +290,7 @@ async function renderRegistre() {
       dbGetPassages(copro_id),
     ]);
   } catch(err) {
-    document.getElementById('reg-tab-historique').innerHTML=`<div class="reg-empty">${_ico('warn',40)}<p>Erreur de chargement</p><span>${err.message}</span></div>`;
+    document.getElementById('reg-tab-historique').innerHTML=`<div class="reg-empty">${_ico('warn',40)}<p>Erreur de chargement</p><span>${_esc(err.message)}</span></div>`;
     return;
   }
 
@@ -368,12 +384,12 @@ function _renderHistoriqueRows() {
     return `<div class="reg-row ${rowCls}" onclick="openPassageDetail('${row.id}')">
       <div>
         <div style="display:flex;align-items:center;gap:8px">
-          <span class="reg-presta-dot" style="background:${row.prestataire_couleur||'#888'}"></span>
-          <span class="reg-presta-name">${row.prestataire_nom||'—'}</span>
+          <span class="reg-presta-dot" style="background:${_esc(row.prestataire_couleur)||'#888'}"></span>
+          <span class="reg-presta-name">${_esc(row.prestataire_nom)||'—'}</span>
         </div>
-        <div class="reg-mission-tag">${row.mission_label||'—'}</div>
+        <div class="reg-mission-tag">${_esc(row.mission_label)||'—'}</div>
       </div>
-      <div class="reg-zone-badge">${_ico(zIco,13)} ${row.zone_nom||'—'}</div>
+      <div class="reg-zone-badge">${_ico(zIco,13)} ${_esc(row.zone_nom)||'—'}</div>
       <div class="reg-time-cell">${_regFmt(row.arrivee)}</div>
       <div class="reg-time-cell">${row.depart?_regFmt(row.depart):'—'}</div>
       <div class="reg-dur-cell">
@@ -397,18 +413,18 @@ function openPassageDetail(id) {
   const isAlert=row.status==='manquant'||row.status==='anomalie';
   const body=`<div style="display:flex;flex-direction:column;gap:14px">
     <div style="display:flex;align-items:center;gap:14px;padding:14px;background:var(--bg-1);border-radius:12px;border:1px solid var(--border)">
-      <div style="width:44px;height:44px;border-radius:12px;background:${row.prestataire_couleur||'#888'};display:flex;align-items:center;justify-content:center;font-weight:900;color:white;font-size:16px">${(row.prestataire_nom||'?').substring(0,2).toUpperCase()}</div>
-      <div><div style="font-size:16px;font-weight:800;color:var(--text-1)">${row.prestataire_nom||'—'}</div><div style="font-size:12px;color:var(--text-3);font-weight:600">${row.mission_label||'—'}</div></div>
+      <div style="width:44px;height:44px;border-radius:12px;background:${_esc(row.prestataire_couleur)||'#888'};display:flex;align-items:center;justify-content:center;font-weight:900;color:white;font-size:16px">${(_esc(row.prestataire_nom)||'?').substring(0,2).toUpperCase()}</div>
+      <div><div style="font-size:16px;font-weight:800;color:var(--text-1)">${_esc(row.prestataire_nom)||'—'}</div><div style="font-size:12px;color:var(--text-3);font-weight:600">${_esc(row.mission_label)||'—'}</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:12px"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:4px">Zone</div><div style="font-size:14px;font-weight:700;color:var(--text-1)">${row.zone_nom||'—'}</div></div>
+      <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:12px"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:4px">Zone</div><div style="font-size:14px;font-weight:700;color:var(--text-1)">${_esc(row.zone_nom)||'—'}</div></div>
       <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:12px"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:4px">Date</div><div style="font-size:14px;font-weight:700;color:var(--text-1);text-transform:capitalize">${_regFmtDate(row.arrivee)}</div></div>
       <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:12px"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:4px">Arrivée</div><div style="font-size:20px;font-weight:900;color:var(--text-1);font-variant-numeric:tabular-nums">${_regFmt(row.arrivee)}</div></div>
       <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:12px"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:4px">Départ</div><div style="font-size:20px;font-weight:900;color:${row.depart?'var(--text-1)':'#EF4444'};font-variant-numeric:tabular-nums">${row.depart?_regFmt(row.depart):'Non scanné'}</div></div>
     </div>
     ${dur?`<div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3)">Durée totale</div><div style="font-size:28px;font-weight:900;color:var(--text-1);font-variant-numeric:tabular-nums;margin-top:4px">${dur}</div></div>`:''}
-    ${row.note?`<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:12px;font-size:13px;color:var(--text-2);font-weight:600">${row.note}</div>`:''}
-    ${row.valide_par_email?`<div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--green);font-weight:700">${_ico('check',13)} Validé par ${row.valide_par_email}</div>`:''}
+    ${row.note?`<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:12px;font-size:13px;color:var(--text-2);font-weight:600">${_esc(row.note)}</div>`:''}
+    ${row.valide_par_email?`<div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--green);font-weight:700">${_ico('check',13)} Validé par ${_esc(row.valide_par_email)}</div>`:''}
   </div>`;
   _modal('Détail du passage',body,isAlert?'Valider manuellement':null,isAlert?()=>openValidationManuelle(id):null);
 }
@@ -420,7 +436,7 @@ function openValidationManuelle(id) {
   const now=new Date(),hhmm=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   const body=`
     <div style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);font-size:13px;font-weight:700;color:#EF4444;display:flex;align-items:center;gap:8px">
-      ${_ico('warn',15)} ${row.status==='manquant'?'Départ non scanné':'Anomalie détectée'} — ${row.prestataire_nom||'?'}
+      ${_ico('warn',15)} ${row.status==='manquant'?'Départ non scanné':'Anomalie détectée'} — ${_esc(row.prestataire_nom)||'?'}
     </div>
     <div class="frm-row"><label class="frm-label">Heure d'arrivée (confirmée)</label><input type="time" class="frm-input" id="vm-arr" value="${_regFmt(row.arrivee)}"></div>
     <div class="frm-row"><label class="frm-label">Heure de départ</label><input type="time" class="frm-input" id="vm-dep" value="${row.depart?_regFmt(row.depart):hhmm}"></div>
@@ -467,25 +483,25 @@ function _renderPrestataires() {
     <div class="presta-card">
       <div class="presta-card-top">
         <div class="presta-card-header">
-          <div class="presta-ava" style="background:${p.couleur};box-shadow:0 6px 16px ${p.couleur}44">${p.nom.substring(0,2).toUpperCase()}</div>
-          <div style="flex:1;min-width:0"><div class="presta-nom">${p.nom}</div><div class="presta-contrat">${(p.missions||[]).map(m=>m.label).join(' · ')||'Aucune mission'}</div></div>
+          <div class="presta-ava" style="background:${_esc(p.couleur)};box-shadow:0 6px 16px ${_esc(p.couleur)}44">${_esc(p.nom).substring(0,2).toUpperCase()}</div>
+          <div style="flex:1;min-width:0"><div class="presta-nom">${_esc(p.nom)}</div><div class="presta-contrat">${(p.missions||[]).map(m=>_esc(m.label)).join(' · ')||'Aucune mission'}</div></div>
           <button class="reg-btn-icon" onclick="openEditPresta('${p.id}')">${_ico('edit',15)}</button>
         </div>
         <div class="presta-missions">
           ${(p.missions||[]).map(m=>{
-            const zn=(m.zones||[]).map(zid=>_regZoneLoc(zid)?.nom||zid).join(', ');
-            return `<div class="presta-mission-row"><div><div class="presta-mission-name">${m.label}</div><div class="presta-mission-meta">${zn} · ${m.horaire_debut||'?'}–${m.horaire_fin||'?'}</div></div><span class="presta-mission-freq">${m.frequence}</span></div>`;
+            const zn=(m.zones||[]).map(zid=>_esc(_regZoneLoc(zid)?.nom||zid)).join(', ');
+            return `<div class="presta-mission-row"><div><div class="presta-mission-name">${_esc(m.label)}</div><div class="presta-mission-meta">${zn} · ${m.horaire_debut||'?'}–${m.horaire_fin||'?'}</div></div><span class="presta-mission-freq">${_esc(m.frequence)}</span></div>`;
           }).join('')||'<div style="font-size:13px;color:var(--text-3);padding:8px">Aucune mission</div>'}
         </div>
         <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:16px">
-          ${p.telephone?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--text-2)">${_ico('phone',13)}<a href="tel:${p.telephone.replace(/\s/g,'')}" style="color:inherit;text-decoration:none">${p.telephone}</a></div>`:''}
-          ${p.email?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--text-2)">${_ico('mail',13)}<a href="mailto:${p.email}" style="color:var(--primary);text-decoration:none">${p.email}</a></div>`:''}
+          ${p.telephone?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--text-2)">${_ico('phone',13)}<a href="tel:${_esc(p.telephone).replace(/\s/g,'')}" style="color:inherit;text-decoration:none">${_esc(p.telephone)}</a></div>`:''}
+          ${p.email?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--text-2)">${_ico('mail',13)}<a href="mailto:${_esc(p.email)}" style="color:var(--primary);text-decoration:none">${_esc(p.email)}</a></div>`:''}
         </div>
         ${p.contrat_debut?`<div style="font-size:11px;color:var(--text-3);font-weight:600;margin-bottom:16px">Contrat : ${p.contrat_debut} → ${p.contrat_fin||'…'}</div>`:''}
       </div>
       <div class="presta-card-footer">
         <button class="reg-btn reg-btn-secondary reg-btn-sm" style="flex:1" onclick="openHistoriquePresta('${p.id}')">${_ico('doc',13)} Historique</button>
-        <button class="reg-btn reg-btn-sm" style="flex:1;background:${p.couleur};color:white;border-color:${p.couleur}" onclick="openPointageManuel('${p.nom}')">${_ico('clock',13)} Badger</button>
+        <button class="reg-btn reg-btn-sm" style="flex:1;background:${_esc(p.couleur)};color:white;border-color:${_esc(p.couleur)}" onclick="openPointageManuel('${_esc(p.nom).replace(/'/g,"\\'")}')">${_ico('clock',13)} Badger</button>
       </div>
     </div>`).join('')}</div>`;
 }
@@ -494,15 +510,15 @@ function openEditPresta(id) {
   const p=id?_regPrestas.find(x=>x.id===id):null,isNew=!p;
   const body=`<div>
     <div class="frm-section">Informations générales</div>
-    <div class="frm-row"><label class="frm-label">Nom *</label><input class="frm-input" id="ep-nom" placeholder="Ex: NettoyagePlus" value="${p?.nom||''}"></div>
+    <div class="frm-row"><label class="frm-label">Nom *</label><input class="frm-input" id="ep-nom" placeholder="Ex: NettoyagePlus" value="${_esc(p?.nom||'')}"></div>
     <div class="frm-grid2">
-      <div class="frm-row"><label class="frm-label">Téléphone</label><input class="frm-input" id="ep-tel" placeholder="01 23 45 67 89" value="${p?.telephone||''}"></div>
-      <div class="frm-row"><label class="frm-label">Email</label><input class="frm-input" id="ep-mail" type="email" placeholder="contact@société.fr" value="${p?.email||''}"></div>
+      <div class="frm-row"><label class="frm-label">Téléphone</label><input class="frm-input" id="ep-tel" placeholder="01 23 45 67 89" value="${_esc(p?.telephone||'')}"></div>
+      <div class="frm-row"><label class="frm-label">Email</label><input class="frm-input" id="ep-mail" type="email" placeholder="contact@société.fr" value="${_esc(p?.email||'')}"></div>
     </div>
-    <div class="frm-row"><label class="frm-label">Adresse</label><input class="frm-input" id="ep-adresse" value="${p?.adresse||''}"></div>
+    <div class="frm-row"><label class="frm-label">Adresse</label><input class="frm-input" id="ep-adresse" value="${_esc(p?.adresse||'')}"></div>
     <div class="frm-grid2">
-      <div class="frm-row"><label class="frm-label">SIRET</label><input class="frm-input" id="ep-siret" value="${p?.siret||''}"></div>
-      <div class="frm-row"><label class="frm-label">Couleur</label><input class="frm-input" id="ep-couleur" type="color" value="${p?.couleur||'#3B82F6'}" style="height:42px;padding:4px"></div>
+      <div class="frm-row"><label class="frm-label">SIRET</label><input class="frm-input" id="ep-siret" value="${_esc(p?.siret||'')}"></div>
+      <div class="frm-row"><label class="frm-label">Couleur</label><input class="frm-input" id="ep-couleur" type="color" value="${_esc(p?.couleur||'#3B82F6')}" style="height:42px;padding:4px"></div>
     </div>
     <div class="frm-grid2">
       <div class="frm-row"><label class="frm-label">Début contrat</label><input class="frm-input" id="ep-cdebut" type="date" value="${p?.contrat_debut||''}"></div>
@@ -512,9 +528,9 @@ function openEditPresta(id) {
     <div id="ep-missions-list">${(p?.missions||[]).map((m,i)=>_mBlock(m,i)).join('')}</div>
     <button class="frm-add-mission" onclick="addMissionBlock()">${_ico('plus',14)} Ajouter une mission</button>
     <div class="frm-section" style="margin-top:16px">Notes internes</div>
-    <div class="frm-row"><label class="frm-label">Observations</label><textarea class="frm-input frm-textarea" id="ep-notes" placeholder="Contact urgent, numéro contrat…">${p?.notes||''}</textarea></div>
+    <div class="frm-row"><label class="frm-label">Observations</label><textarea class="frm-input frm-textarea" id="ep-notes" placeholder="Contact urgent, numéro contrat…">${_esc(p?.notes||'')}</textarea></div>
   </div>`;
-  _modal(isNew?'Nouveau prestataire':`Modifier — ${p.nom}`,body,isNew?'Créer':'Enregistrer',async()=>{
+  _modal(isNew?'Nouveau prestataire':`Modifier — ${_esc(p.nom)}`,body,isNew?'Créer':'Enregistrer',async()=>{
     const nom=document.getElementById('ep-nom')?.value?.trim();
     if(!nom){alert('Le nom est requis.');return false;}
     const btn=document.getElementById('reg-modal-confirm');
@@ -537,13 +553,13 @@ function openEditPresta(id) {
 }
 
 function _mBlock(m,i) {
-  const zo=_regZones.map(z=>`<option value="${z.id}" ${(m?.zones||[]).includes(z.id)?'selected':''}>${z.nom}</option>`).join('');
+  const zo=_regZones.map(z=>`<option value="${z.id}" ${(m?.zones||[]).includes(z.id)?'selected':''}>${_esc(z.nom)}</option>`).join('');
   return `<div class="frm-mission-block" id="mb-${i}">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <span style="font-size:12px;font-weight:800;color:var(--text-3)">Mission ${i+1}</span>
       <button type="button" class="reg-btn reg-btn-ghost reg-btn-sm" style="color:#EF4444" onclick="document.getElementById('mb-${i}').remove()">${_ico('trash2',12)}</button>
     </div>
-    <div class="frm-row"><label class="frm-label">Intitulé *</label><input class="frm-input" placeholder="Ex: Ménage des communs" value="${m?.label||''}"></div>
+    <div class="frm-row"><label class="frm-label">Intitulé *</label><input class="frm-input" placeholder="Ex: Ménage des communs" value="${_esc(m?.label||'')}"></div>
     <div class="frm-grid2">
       <div class="frm-row"><label class="frm-label">Zone(s)</label><select class="frm-input" multiple style="height:80px">${zo}</select></div>
       <div class="frm-row"><label class="frm-label">Fréquence</label><select class="frm-input frm-select">${['Quotidien','2× / semaine','1× / semaine','2× / mois','1× / mois','Sur appel'].map(f=>`<option ${m?.frequence===f?'selected':''}>${f}</option>`).join('')}</select></div>
@@ -561,7 +577,7 @@ function addMissionBlock() {
 
 async function openHistoriquePresta(id) {
   const p=_regPrestas.find(x=>x.id===id); if(!p)return;
-  _modal(`Historique — ${p.nom}`,`<div class="reg-empty">${_ico('spin',28)}<p>Chargement…</p></div>`,null,null);
+  _modal(`Historique — ${_esc(p.nom)}`,`<div class="reg-empty">${_ico('spin',28)}<p>Chargement…</p></div>`,null,null);
   try{
     const rows=await dbGetPassages(_coproId(),{limit:50,prestataire_id:id});
     const body=rows.length?`<div style="display:flex;flex-direction:column;gap:8px">${rows.map(row=>{
@@ -569,13 +585,13 @@ async function openHistoriquePresta(id) {
       const bc={en_cours:'badge-en_cours',termine:'badge-termine',anomalie:'badge-anomalie',manquant:'badge-manquant'};
       const bt={en_cours:'En cours',termine:'OK',anomalie:'Anomalie',manquant:'Manquant'};
       return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:var(--bg-1);border-radius:10px;border:1px solid var(--border)">
-        <div><div style="font-size:13px;font-weight:700;color:var(--text-1);text-transform:capitalize">${_regFmtDate(row.arrivee)}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px">${row.zone_nom||'—'} · ${_regFmt(row.arrivee)} → ${row.depart?_regFmt(row.depart):'?'}</div></div>
+        <div><div style="font-size:13px;font-weight:700;color:var(--text-1);text-transform:capitalize">${_regFmtDate(row.arrivee)}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px">${_esc(row.zone_nom)||'—'} · ${_regFmt(row.arrivee)} → ${row.depart?_regFmt(row.depart):'?'}</div></div>
         <div style="display:flex;align-items:center;gap:10px">${dur?`<span style="font-size:15px;font-weight:900;color:var(--text-1)">${dur}</span>`:''}<span class="reg-badge ${bc[row.status]||'badge-termine'}"><span class="bdot"></span>${bt[row.status]||row.status}</span></div>
       </div>`;
     }).join('')}</div>`:`<div class="reg-empty">${_ico('doc',36)}<p>Aucun passage</p></div>`;
     const bodyEl=document.querySelector('#reg-modal .mb'); if(bodyEl)bodyEl.innerHTML=body;
   }catch(err){
-    const bodyEl=document.querySelector('#reg-modal .mb'); if(bodyEl)bodyEl.innerHTML=`<div class="reg-empty">${_ico('warn',36)}<p>Erreur : ${err.message}</p></div>`;
+    const bodyEl=document.querySelector('#reg-modal .mb'); if(bodyEl)bodyEl.innerHTML=`<div class="reg-empty">${_ico('warn',36)}<p>Erreur : ${_esc(err.message)}</p></div>`;
   }
 }
 
@@ -593,8 +609,8 @@ function _renderZones() {
       ${_regZones.map(z=>{
         const dp=_regPassages.filter(p=>p.zone_id===z.id).sort((a,b)=>new Date(b.arrivee)-new Date(a.arrivee))[0];
         return `<div class="zone-card">
-          <div class="zone-card-header"><div class="zone-ico">${_ico(z.icone,20)}</div><span class="zone-token">${z.qr_token.slice(-8)}</span></div>
-          <div class="zone-name">${z.nom}</div>
+          <div class="zone-card-header"><div class="zone-ico">${_ico(z.icone,20)}</div><span class="zone-token">${_esc(z.qr_token).slice(-8)}</span></div>
+          <div class="zone-name">${_esc(z.nom)}</div>
           <div class="zone-lastpass">${dp?`Dernier passage : ${_regFmtDate(dp.arrivee)}`:'Aucun passage enregistré'}</div>
           <div class="zone-actions">
             <button class="reg-btn reg-btn-secondary reg-btn-sm" style="flex:1" onclick="openQrZone('${z.id}')">${_ico('qr',13)} Affiche QR</button>
@@ -608,11 +624,11 @@ function _renderZones() {
 function openQrZone(id) {
   const z=_regZones.find(x=>x.id===id); if(!z)return;
   const url=`${location.origin}/scan?zone=${z.qr_token}`,svg=_qrSvg(url,220);
-  _modal(`QR Code — ${z.nom}`,`<div class="qr-modal-content"><div class="qr-zone-name">${z.nom}</div><div class="qr-frame">${svg}</div><div class="qr-url">${url}</div><div class="qr-instructions">Scannez à l'<strong>arrivée</strong> et au <strong>départ</strong>.<br>Aucun compte requis.</div></div>`,
+  _modal(`QR Code — ${_esc(z.nom)}`,`<div class="qr-modal-content"><div class="qr-zone-name">${_esc(z.nom)}</div><div class="qr-frame">${svg}</div><div class="qr-url">${_esc(url)}</div><div class="qr-instructions">Scannez à l'<strong>arrivée</strong> et au <strong>départ</strong>.<br>Aucun compte requis.</div></div>`,
     `${_ico('print',14)} Imprimer`,()=>{
       const pe=document.getElementById('reg-print-area'); if(!pe)return;
       pe.style.display='flex';
-      pe.innerHTML=`<div class="pt">Pointage Prestataires</div><div class="ps">${z.nom}<br><small style="font-weight:500;color:#9ca3af">Scannez à l'arrivée ET au départ</small></div><div class="pqr">${svg}</div><div class="pu">${url}</div><div class="pf">Propulsé par CoproSync</div>`;
+      pe.innerHTML=`<div class="pt">Pointage Prestataires</div><div class="ps">${_esc(z.nom)}<br><small style="font-weight:500;color:#9ca3af">Scannez à l'arrivée ET au départ</small></div><div class="pqr">${svg}</div><div class="pu">${_esc(url)}</div><div class="pf">Propulsé par CoproSync</div>`;
       setTimeout(()=>{window.print();pe.style.display='none';},100);
     });
 }
@@ -623,14 +639,14 @@ function _editZoneModal(id) {
   const z=id?_regZones.find(x=>x.id===id):null,isNew=!z;
   const icons=['trash','door','car','leaf','wrench','qr'];
   const body=`
-    <div class="frm-row"><label class="frm-label">Nom *</label><input class="frm-input" id="ez-nom" placeholder="Ex: Local Poubelles — Bat. B" value="${z?.nom||''}"></div>
+    <div class="frm-row"><label class="frm-label">Nom *</label><input class="frm-input" id="ez-nom" placeholder="Ex: Local Poubelles — Bat. B" value="${_esc(z?.nom||'')}"></div>
     <div class="frm-row"><label class="frm-label">Icône</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap" id="ez-ico-picker">
         ${icons.map(ico=>`<button type="button" class="reg-btn-icon" data-ico="${ico}" style="${(z?.icone||'trash')===ico?'background:var(--bg-1);border-color:var(--primary);':''}" onclick="document.querySelectorAll('#ez-ico-picker button').forEach(b=>{b.style.background='';b.style.borderColor=''});this.style.background='var(--bg-1)';this.style.borderColor='var(--primary)';document.getElementById('ez-ico').value='${ico}'">${_ico(ico,18)}</button>`).join('')}
-        <input type="hidden" id="ez-ico" value="${z?.icone||'trash'}">
+        <input type="hidden" id="ez-ico" value="${_esc(z?.icone||'trash')}">
       </div>
     </div>`;
-  _modal(isNew?'Nouvelle zone QR':`Modifier — ${z.nom}`,body,isNew?'Créer la zone':'Enregistrer',async()=>{
+  _modal(isNew?'Nouvelle zone QR':`Modifier — ${_esc(z.nom)}`,body,isNew?'Créer la zone':'Enregistrer',async()=>{
     const nom=document.getElementById('ez-nom')?.value?.trim(),ico=document.getElementById('ez-ico')?.value||'trash';
     if(!nom){alert('Le nom est requis.');return false;}
     const btn=document.getElementById('reg-modal-confirm');
@@ -650,8 +666,8 @@ function _editZoneModal(id) {
 
 // ── POINTAGE MANUEL ───────────────────────────────────────────────────────────
 function openPointageManuel(preselectNom=null) {
-  const pOpts=_regPrestas.map(p=>`<option value="${p.id}" ${p.nom===preselectNom?'selected':''}>${p.nom}</option>`).join('');
-  const zOpts=_regZones.map(z=>`<option value="${z.id}">${z.nom}</option>`).join('');
+  const pOpts=_regPrestas.map(p=>`<option value="${p.id}" ${p.nom===preselectNom?'selected':''}>${_esc(p.nom)}</option>`).join('');
+  const zOpts=_regZones.map(z=>`<option value="${z.id}">${_esc(z.nom)}</option>`).join('');
   const now=new Date(),hhmm=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,today=now.toISOString().slice(0,10);
   const body=`
     <div class="frm-row"><label class="frm-label">Prestataire</label><select class="frm-input frm-select" id="pm-presta">${pOpts}</select></div>
@@ -692,11 +708,11 @@ function _modal(title,bodyHtml,btnText,onConfirm,opts={}) {
   ov.id='reg-modal';ov.className='overlay open';
   ov.innerHTML=`<div class="modal" style="max-width:${opts.wide?640:520}px;border-radius:22px;overflow:hidden;display:flex;flex-direction:column;max-height:90vh">
     <div style="padding:22px 26px;border-bottom:1px solid var(--border);background:var(--bg-1);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-      <span style="font-size:18px;font-weight:900;color:var(--text-1);letter-spacing:-.4px">${title}</span>
+      <span style="font-size:18px;font-weight:900;color:var(--text-1);letter-spacing:-.4px">${_esc(title)}</span>
       <button type="button" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-2)" onclick="document.getElementById('reg-modal').remove()">${_ico('close',14)}</button>
     </div>
     <div class="mb" style="padding:24px 26px;overflow-y:auto;flex:1">${bodyHtml}</div>
-    ${btnText?`<div style="padding:18px 26px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;flex-shrink:0;background:var(--bg-1)"><button type="button" class="reg-btn reg-btn-ghost" onclick="document.getElementById('reg-modal').remove()">Annuler</button><button type="button" class="reg-btn reg-btn-primary" id="reg-modal-confirm">${btnText}</button></div>`:`<div style="padding:18px 26px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;flex-shrink:0"><button type="button" class="reg-btn reg-btn-secondary" onclick="document.getElementById('reg-modal').remove()">Fermer</button></div>`}
+    ${btnText?`<div style="padding:18px 26px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;flex-shrink:0;background:var(--bg-1)"><button type="button" class="reg-btn reg-btn-ghost" onclick="document.getElementById('reg-modal').remove()">Annuler</button><button type="button" class="reg-btn reg-btn-primary" id="reg-modal-confirm">${_esc(btnText)}</button></div>`:`<div style="padding:18px 26px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;flex-shrink:0"><button type="button" class="reg-btn reg-btn-secondary" onclick="document.getElementById('reg-modal').remove()">Fermer</button></div>`}
   </div>`;
   document.body.appendChild(ov);
   ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
@@ -726,7 +742,7 @@ async function renderScanPage(token) {
     <div style="background:white;border-radius:24px;padding:36px 28px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.1);text-align:center">
       <div style="width:64px;height:64px;border-radius:18px;background:${color}20;border:2px solid ${color}30;margin:0 auto 20px;display:flex;align-items:center;justify-content:center">${_ico(zone.icone||'qr',28).replace(/currentColor/g,color)}</div>
       <div style="font-size:13px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">CoproSync · Pointage</div>
-      <div style="font-size:22px;font-weight:900;color:#111827;margin-bottom:4px">${zone.nom}</div>
+      <div style="font-size:22px;font-weight:900;color:#111827;margin-bottom:4px">${_esc(zone.nom)}</div>
       <div style="font-size:14px;color:#6b7280;margin-bottom:28px">${type==='arrivee'?'Aucun passage en cours.':existing?`Passage en cours · arrivée à ${_regFmt(existing.arrivee)}`:''}</div>
       <div style="margin-bottom:20px;text-align:left">
         <label style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;display:block;margin-bottom:8px">Votre nom</label>
@@ -748,7 +764,7 @@ async function _handleScan(zoneId,type,coproId) {
     else{await dbScanDepart(zoneId);}
     const page=document.getElementById('page');
     const color=type==='arrivee'?'#22C55E':'#3B82F6';
-    if(page)page.innerHTML=`<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f9fafb;font-family:-apple-system,sans-serif;padding:24px"><div style="text-align:center;max-width:320px"><div style="width:80px;height:80px;border-radius:50%;background:${color};margin:0 auto 24px;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 32px ${color}44">${_ico('check',36).replace(/currentColor/g,'white')}</div><div style="font-size:26px;font-weight:900;color:#111827;margin-bottom:8px">${type==='arrivee'?'Arrivée enregistrée !':'Départ enregistré !'}</div><div style="font-size:16px;color:#6b7280;margin-bottom:4px">${nom}</div><div style="font-size:13px;color:#9ca3af">${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} · ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div></div></div>`;
+    if(page)page.innerHTML=`<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f9fafb;font-family:-apple-system,sans-serif;padding:24px"><div style="text-align:center;max-width:320px"><div style="width:80px;height:80px;border-radius:50%;background:${color};margin:0 auto 24px;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 32px ${color}44">${_ico('check',36).replace(/currentColor/g,'white')}</div><div style="font-size:26px;font-weight:900;color:#111827;margin-bottom:8px">${type==='arrivee'?'Arrivée enregistrée !':'Départ enregistré !'}</div><div style="font-size:16px;color:#6b7280;margin-bottom:4px">${_esc(nom)}</div><div style="font-size:13px;color:#9ca3af">${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} · ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div></div></div>`;
   }catch(err){
     if(btn){btn.disabled=false;btn.textContent=type==='arrivee'?'Enregistrer mon arrivée':'Enregistrer mon départ';}
     alert('Erreur : '+err.message);
