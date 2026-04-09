@@ -4,13 +4,20 @@
   const urlParams = new URLSearchParams(window.location.search);
   const zoneToken = urlParams.get('zone');
   if (window.location.pathname.includes('/scan') || zoneToken) {
-    $('login-screen').style.display = 'none';
-    $('app').style.display = 'block';
-    $('sidebar').style.display = 'none'; // Cacher le menu
-    $('topbar').style.display = 'none';  // Cacher la topbar
-    $('bottom-nav').style.display = 'none'; // Cacher la barre du bas
+    console.log("✅ Scan QR détecté, sécurisation de l'affichage...");
+
+    // On sécurise chaque modification d'affichage (évite les crashs si l'élément n'est pas encore prêt)
+    try {
+      const elLogin = $('login-screen'); if (elLogin) elLogin.style.display = 'none';
+      const elApp = $('app'); if (elApp) elApp.style.display = 'block';
+      const elSidebar = $('sidebar'); if (elSidebar) elSidebar.style.display = 'none';
+      const elTopbar = $('topbar'); if (elTopbar) elTopbar.style.display = 'none';
+      const elBottomNav = $('bottom-nav'); if (elBottomNav) elBottomNav.style.display = 'none';
+    } catch (e) {
+      console.warn("Certains éléments UI n'étaient pas prêts à être masqués.", e);
+    }
     
-    // Attendre que le module registre soit chargé s'il est asynchrone
+    // Attendre que le module registre soit chargé
     setTimeout(() => {
       if (typeof renderScanPage === 'function') {
         renderScanPage(zoneToken);
@@ -18,9 +25,9 @@
         alert("Erreur: Le module de scan n'est pas accessible.");
       }
     }, 100);
+    
     return; // On bloque l'initialisation classique de la session
   }
-
   // Mode inscription public
   if (typeof checkRegisterMode === 'function' && checkRegisterMode()) return;
 
