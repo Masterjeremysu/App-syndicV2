@@ -199,20 +199,32 @@ function initUI() {
 
 async function loadAll() {
   try {
+    // 1. On charge l'essentiel pour afficher le dashboard le plus vite possible
     await loadTickets();
     if (currentPage === 'dashboard') renderDashboard();
 
+    // 2. On précharge le reste en arrière-plan
     const tasks = [];
     if (Permissions.has('contrats.view'))  tasks.push(loadContrats());
     if (Permissions.has('cles.view'))      tasks.push(loadCles());
     if (Permissions.has('journal.view'))   tasks.push(loadJournal());
+    
+    // 🔥 CORRECTION ICI : On force le chargement pour alimenter le Dashboard au démarrage
+    if (typeof loadVotes === 'function')     tasks.push(loadVotes());
+    if (typeof loadDocuments === 'function') tasks.push(loadDocuments());
+
     tasks.push(loadAnnonceCache());
     tasks.push(loadEvenementsCache());
     if (Permissions.has('contacts.view')) tasks.push(loadContactsCache());
 
+    // On attend que tout soit fini
     await Promise.all(tasks);
+    
+    // 3. On met à jour l'UI avec les nouvelles données fraîchement reçues
     updateBadges();
     checkNotifications();
+    
+    // On re-rend le dashboard pour qu'il affiche les Votes et Documents !
     if (currentPage === 'dashboard') renderDashboard();
   } catch (e) {
     err('loadAll error:', e);
