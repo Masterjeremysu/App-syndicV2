@@ -501,7 +501,7 @@ function _renderPrestataires() {
       </div>
       <div class="presta-card-footer">
         <button class="reg-btn reg-btn-secondary reg-btn-sm" style="flex:1" onclick="openHistoriquePresta('${p.id}')">${_ico('doc',13)} Historique</button>
-        <button class="reg-btn reg-btn-sm" style="flex:1;background:${p.couleur};color:white;border-color:${p.couleur}" onclick="openPointageManuel('${(p.nom || '').replace(/'/g, "\\'")}')">${_ico('clock',13)} Badger</button>
+        <button class="reg-btn reg-btn-sm" style="flex:1;background:${_esc(p.couleur)};color:white;border-color:${_esc(p.couleur)}" onclick="openPointageManuel('${p.id}')">${_ico('clock',13)} Badger</button>
       </div>
     </div>`).join('')}</div>`;
 }
@@ -665,8 +665,8 @@ function _editZoneModal(id) {
 }
 
 // ── POINTAGE MANUEL ───────────────────────────────────────────────────────────
-function openPointageManuel(preselectNom=null) {
-  const pOpts=_regPrestas.map(p=>`<option value="${p.id}" ${p.nom===preselectNom?'selected':''}>${_esc(p.nom)}</option>`).join('');
+function openPointageManuel(preselectId=null) {
+  const pOpts=_regPrestas.map(p=>`<option value="${p.id}" ${p.id===preselectId?'selected':''}>${_esc(p.nom)}</option>`).join('');
   const zOpts=_regZones.map(z=>`<option value="${z.id}">${_esc(z.nom)}</option>`).join('');
   const now=new Date(),hhmm=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,today=now.toISOString().slice(0,10);
   const body=`
