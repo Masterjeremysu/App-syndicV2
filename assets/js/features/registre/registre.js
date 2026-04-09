@@ -984,19 +984,55 @@ async function enregistrerPassage(zoneToken) {
     alert("Erreur lors de l'enregistrement. Veuillez réessayer.");
   }
 }
-async function _handleScan(zoneId,type,coproId) {
-  const nom=document.getElementById('scan-nom')?.value?.trim();
-  if(!nom){alert('Veuillez entrer votre nom.');return;}
-  const btn=document.getElementById('scan-btn');
-  if(btn){btn.disabled=true;btn.textContent='Enregistrement…';}
-  try{
-    if(type==='arrivee'){await dbScanArrivee({copro_id:coproId,zone_id:zoneId,nom_intervenant:nom});}
-    else{await dbScanDepart(zoneId);}
-    const page=document.getElementById('page');
-    const color=type==='arrivee'?'#22C55E':'#3B82F6';
-    if(page)page.innerHTML=`<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f9fafb;font-family:-apple-system,sans-serif;padding:24px"><div style="text-align:center;max-width:320px"><div style="width:80px;height:80px;border-radius:50%;background:${color};margin:0 auto 24px;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 32px ${color}44">${_ico('check',36).replace(/currentColor/g,'white')}</div><div style="font-size:26px;font-weight:900;color:#111827;margin-bottom:8px">${type==='arrivee'?'Arrivée enregistrée !':'Départ enregistré !'}</div><div style="font-size:16px;color:#6b7280;margin-bottom:4px">${_esc(nom)}</div><div style="font-size:13px;color:#9ca3af">${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} · ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div></div></div>`;
-  }catch(err){
-    if(btn){btn.disabled=false;btn.textContent=type==='arrivee'?'Enregistrer mon arrivée':'Enregistrer mon départ';}
-    alert('Erreur : '+err.message);
+async function _handleScan(zoneId, type, coproId) {
+  // 1. On récupère le nom que le gars a tapé dans ton interface
+  const nomIntervenant = document.getElementById('scan-nom').value;
+
+  // Optionnel : Mettre le bouton en mode chargement
+  const btn = document.getElementById('scan-btn');
+  const oldText = btn.innerText;
+  btn.innerText = "Enregistrement...";
+  btn.disabled = true;
+
+  try {
+    // 2. 🎯 LA MAGIE : On demande à Supabase à quelle entreprise appartient cette zone
+    const { data: zoneData, error: zoneError } = await sb
+      .from('zones') 
+      .select('prestataire_id')
+      .eq('id', zoneId)
+      .single();
+
+    if (zoneError || !zoneData?.prestataire_id) {
+      alert("Erreur : Cette zone n'est liée à aucun prestataire !");
+      btn.innerText = oldText;
+      btn.disabled = false;
+      return;
+    }
+
+    // 3. On enregistre le passage avec le bon prestataire
+    const { error: insertError } = await sb
+      .from('passages')
+      .insert({
+        zone_id: zoneId,
+        copro_id: coproId,
+        prestataire_id: zoneData.prestataire_id, // L'ID trouvé automatiquement !
+        nom_intervenant: nomIntervenant, // Le prénom tapé (ex: "Jean")
+        type_passage: type, // 'arrivee' ou 'depart'
+        date_passage: new Date().toISOString()
+      });
+
+    if (insertError) throw insertError;
+
+    // 4. Succès !
+    alert("✅ Passage enregistré avec succès !");
+    
+    // On recharge la page pour mettre à jour l'affichage (passer de Arrivée à Départ)
+    window.location.reload();
+
+  } catch (error) {
+    console.error(error);
+    alert("Erreur lors de la sauvegarde.");
+    btn.innerText = oldText;
+    btn.disabled = false;
   }
 }
