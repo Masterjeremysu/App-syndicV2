@@ -742,32 +742,33 @@ function openQrZone(id) {
   
   const url = `${location.origin}/scan?zone=${z.qr_token}`;
   
-  // 🔥 LE CORRECTIF : On utilise une vraie API pour générer un vrai QR Code scannable !
-  const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}&margin=0`;
+  // Utilisation de l'API QR Code
+  const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}&margin=1`;
   
-  // Image pour la modale (taille moyenne)
-  const imgHtml = `<img src="${qrApiUrl}" width="220" height="220" style="display:block;border-radius:4px;mix-blend-mode:multiply;" alt="QR Code Zone" />`;
+  // 🔥 FIX : Plus de mix-blend-mode. On force un fond blanc et un padding pour le Dark Mode.
+  const imgHtml = `<img src="${qrApiUrl}" width="220" height="220" style="display:block;border-radius:8px;background:white;padding:10px;" alt="QR Code Zone" />`;
 
+  // 🔥 FIX : On retire l'icône _ico('print') du bouton "Imprimer" pour éviter le bug d'échappement HTML
   _modal(`QR Code — ${_esc(z.nom)}`,
     `<div class="qr-modal-content">
-      <div class="qr-zone-name" style="margin-bottom: -10px; font-size: 18px;">${_esc(z.nom)}</div>
-      <div class="qr-frame" style="background:white;padding:24px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,0.06);border:1px solid var(--border);display:flex;justify-content:center;align-items:center;min-height:220px;">
+      <div class="qr-zone-name" style="margin-bottom: 10px; font-size: 18px;">${_esc(z.nom)}</div>
+      <div class="qr-frame" style="background:white;padding:10px;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,0.06);display:flex;justify-content:center;align-items:center;">
         ${imgHtml}
       </div>
-      <div class="qr-url">${_esc(url)}</div>
-      <div class="qr-instructions">Scannez à l'<strong>arrivée</strong> et au <strong>départ</strong>.<br>Aucun compte requis.</div>
+      <div class="qr-url" style="margin-top:16px;word-break:break-all;font-size:12px;">${_esc(url)}</div>
+      <div class="qr-instructions" style="margin-top:12px;">Scannez à l'<strong>arrivée</strong> et au <strong>départ</strong>.<br>Aucun compte requis.</div>
     </div>`,
-    `${_ico('print',14)} Imprimer`,
+    `Imprimer`, // Texte simple pour le bouton
     () => {
       const pe = document.getElementById('reg-print-area'); 
       if (!pe) return;
       
       pe.style.display = 'flex';
       
-      // Image grande résolution pour l'impression (On déclenche l'impression seulement quand l'image est chargée)
+      // Image grande résolution pour l'impression
       const printImgHtml = `<img src="${qrApiUrl}" width="340" height="340" style="display:block;" onload="window.print();document.getElementById('reg-print-area').style.display='none';" />`;
       
-      // Magnifique mise en page A4 pour plastifier
+      // Mise en page A4 pour l'impression
       pe.innerHTML = `
         <div class="pt">Pointage Prestataires</div>
         <div class="ps">${_esc(z.nom)}<br><small style="font-weight:500;color:#9ca3af">Scannez à l'arrivée ET au départ</small></div>
@@ -778,7 +779,7 @@ function openQrZone(id) {
         <div class="pf" style="margin-top:40px; color:#9ca3af; font-weight:700;">Propulsé par CoproSync</div>
       `;
         
-      // Sécurité : Si l'image met plus de 2 secondes à charger (mauvaise connexion), on force l'impression quand même.
+      // Sécurité anti-blocage
       setTimeout(() => { 
         if (pe.style.display === 'flex') {
           window.print(); 
