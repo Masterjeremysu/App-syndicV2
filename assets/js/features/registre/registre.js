@@ -979,45 +979,49 @@ async function _handleScan(zoneId, type, coproId) {
   const nomIntervenant = document.getElementById('scan-nom').value;
   const btn = document.getElementById('scan-btn');
   const oldText = btn.innerText;
+  
   btn.innerText = "Enregistrement...";
   btn.disabled = true;
 
   try {
-    // 1. Recherche du prestataire assigné à la zone
-    const { data: zoneData, error: zoneError } = await sb
-      .from('zones') 
+    // 1. Récupération du prestataire de la zone
+    const { data: zoneData } = await sb
+      .from('zones')
       .select('prestataire_id')
       .eq('id', zoneId)
       .single();
 
-    if (zoneError || !zoneData?.prestataire_id) {
-      alert("Erreur : Cette zone n'est liée à aucun prestataire !");
-      btn.innerText = oldText;
-      btn.disabled = false;
-      return;
-    }
-
-    // 2. Création du passage avec l'ID du prestataire trouvé !
-    const { error: insertError } = await sb
-      .from('passages')
-      .insert({
+    if (type === 'arrivee') {
+      // 🟢 ARRIVÉE : On crée une nouvelle ligne
+      const { error } = await sb.from('passages').insert({
         zone_id: zoneId,
         copro_id: coproId,
-        prestataire_id: zoneData.prestataire_id, 
-        nom_intervenant: nomIntervenant, 
-        arrivee: new Date().toISOString(), // L'heure actuelle
-        status: 'en_cours'
+        prestataire_id: zoneData.prestataire_id,
+        nom_intervenant: nomIntervenant,
+        arrivee: new Date().toISOString(),
+        status: 'en_cours' // On marque que la mission commence
       });
+      if (error) throw error;
+    } 
+    else {
+      // 🔴 DÉPART : On met à jour la ligne qui est "en_cours"
+      const { error } = await sb.from('passages')
+        .update({ 
+          depart: new Date().toISOString(), 
+          status: 'termine' // On ferme la mission
+        })
+        .eq('zone_id', zoneId)
+        .eq('status', 'en_cours'); // 🎯 On cible uniquement la mission ouverte
+        
+      if (error) throw error;
+    }
 
-    if (insertError) throw insertError;
-
-    // 3. Succès
-    alert("✅ Passage enregistré avec succès !");
+    alert("✅ Passage enregistré !");
     window.location.reload();
 
   } catch (error) {
     console.error(error);
-    alert("Erreur lors de la sauvegarde : " + error.message);
+    alert("Erreur : " + error.message);
     btn.innerText = oldText;
     btn.disabled = false;
   }
