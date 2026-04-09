@@ -624,20 +624,7 @@ function _widgetVotes() {
   }).join('');
 }
 
-function _widgetDocuments() {
-  const docs=(typeof _docsCache!=='undefined')?_docsCache:[];
-  if(!docs.length) return '<div class="d5-empty">Aucun document</div>';
-  return docs.slice(0,4).map(doc=>{
-    const cat=(typeof DOC_CATS!=='undefined'&&DOC_CATS[doc.categorie])?DOC_CATS[doc.categorie]:{ico:'📄'};
-    const isNew=(typeof _docsVus!=='undefined')?!_docsVus.has(doc.id):false;
-    return '<div class="d5-row" onclick="nav(\'documents\')">'
-      +'<div class="d5-row-ico">'+cat.ico+'</div>'
-      +'<div class="d5-row-body"><div class="d5-row-title">'+_e(doc.titre)+'</div>'
-      +'<div class="d5-row-sub">'+fmtD(doc.created_at)+'</div></div>'
-      +(isNew?'<span class="d5-pill d5-pill-b">Nouveau</span>':'')
-      +'</div>';
-  }).join('');
-}
+
 
 /* ═══════════════════════════════════════════════════════════════
    CONTRÔLES WIDGETS — taille, visible/masqué, reset
