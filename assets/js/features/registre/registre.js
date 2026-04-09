@@ -530,15 +530,25 @@ function openEditPresta(id) {
     <div class="frm-section" style="margin-top:16px">Notes internes</div>
     <div class="frm-row"><label class="frm-label">Observations</label><textarea class="frm-input frm-textarea" id="ep-notes" placeholder="Contact urgent, numéro contrat…">${_esc(p?.notes||'')}</textarea></div>
   </div>`;
+  
   _modal(isNew?'Nouveau prestataire':`Modifier — ${_esc(p.nom)}`,body,isNew?'Créer':'Enregistrer',async()=>{
     const nom=document.getElementById('ep-nom')?.value?.trim();
     if(!nom){alert('Le nom est requis.');return false;}
     const btn=document.getElementById('reg-modal-confirm');
     if(btn){btn.disabled=true;btn.textContent='Enregistrement…';}
-    const missions=Array.from(document.querySelectorAll('.frm-mission-block')).map(block=>{
-      const inputs=block.querySelectorAll('input'),sels=block.querySelectorAll('select');
-      return{label:inputs[0]?.value||'',zones:Array.from(sels[0]?.selectedOptions||[]).map(o=>o.value),frequence:sels[1]?.value||'Sur appel',horaire_debut:inputs[1]?.value||null,horaire_fin:inputs[2]?.value||null};
-    }).filter(m=>m.label);
+    
+    // 🔥 NOUVELLE LOGIQUE PRO : Récupération des données via les Checkboxes et les Classes
+    const missions = Array.from(document.querySelectorAll('.frm-mission-block')).map(block => {
+      return {
+        label: block.querySelector('.mission-label')?.value || '',
+        // On liste toutes les cases cochées de ce bloc précis :
+        zones: Array.from(block.querySelectorAll('.mission-zone-cb:checked')).map(cb => cb.value),
+        frequence: block.querySelector('.mission-freq')?.value || 'Sur appel',
+        horaire_debut: block.querySelector('.mission-debut')?.value || null,
+        horaire_fin: block.querySelector('.mission-fin')?.value || null
+      };
+    }).filter(m => m.label);
+
     try{
       await dbUpsertPrestataire(_coproId(),{id:id||undefined,nom,couleur:document.getElementById('ep-couleur')?.value||'#3B82F6',telephone:document.getElementById('ep-tel')?.value||'',email:document.getElementById('ep-mail')?.value||'',adresse:document.getElementById('ep-adresse')?.value||'',siret:document.getElementById('ep-siret')?.value||'',contrat_debut:document.getElementById('ep-cdebut')?.value||null,contrat_fin:document.getElementById('ep-cfin')?.value||null,notes:document.getElementById('ep-notes')?.value||'',missions});
       if(typeof toast==='function')toast(isNew?`${nom} ajouté`:`${nom} mis à jour`,'ok');
@@ -553,20 +563,35 @@ function openEditPresta(id) {
 }
 
 function _mBlock(m,i) {
-  const zo=_regZones.map(z=>`<option value="${z.id}" ${(m?.zones||[]).includes(z.id)?'selected':''}>${_esc(z.nom)}</option>`).join('');
+  // 🔥 GÉNÉRATION DES CASES À COCHER : Beaucoup plus fluide pour l'utilisateur
+  const zo = _regZones.map(z => `
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-1);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background 0.15s;" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='transparent'">
+      <input type="checkbox" value="${z.id}" class="mission-zone-cb" style="width:16px;height:16px;accent-color:var(--primary);cursor:pointer;margin:0;" ${(m?.zones||[]).includes(z.id)?'checked':''}>
+      ${_esc(z.nom)}
+    </label>
+  `).join('');
+
   return `<div class="frm-mission-block" id="mb-${i}">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <span style="font-size:12px;font-weight:800;color:var(--text-3)">Mission ${i+1}</span>
       <button type="button" class="reg-btn reg-btn-ghost reg-btn-sm" style="color:#EF4444" onclick="document.getElementById('mb-${i}').remove()">${_ico('trash2',12)}</button>
     </div>
-    <div class="frm-row"><label class="frm-label">Intitulé *</label><input class="frm-input" placeholder="Ex: Ménage des communs" value="${_esc(m?.label||'')}"></div>
+    <div class="frm-row"><label class="frm-label">Intitulé *</label><input class="frm-input mission-label" placeholder="Ex: Ménage des communs" value="${_esc(m?.label||'')}"></div>
+    
+    <div class="frm-row">
+      <label class="frm-label">Zone(s) assignée(s)</label>
+      <div style="max-height:140px;overflow-y:auto;background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:6px;">
+        ${zo || '<div style="font-size:13px;color:var(--text-3);padding:8px">Aucune zone QR créée.</div>'}
+      </div>
+    </div>
+
     <div class="frm-grid2">
-      <div class="frm-row"><label class="frm-label">Zone(s)</label><select class="frm-input" multiple style="height:80px">${zo}</select></div>
-      <div class="frm-row"><label class="frm-label">Fréquence</label><select class="frm-input frm-select">${['Quotidien','2× / semaine','1× / semaine','2× / mois','1× / mois','Sur appel'].map(f=>`<option ${m?.frequence===f?'selected':''}>${f}</option>`).join('')}</select></div>
+      <div class="frm-row"><label class="frm-label">Fréquence</label><select class="frm-input frm-select mission-freq">${['Quotidien','2× / semaine','1× / semaine','2× / mois','1× / mois','Sur appel'].map(f=>`<option ${m?.frequence===f?'selected':''}>${f}</option>`).join('')}</select></div>
+      <div></div>
     </div>
     <div class="frm-grid2">
-      <div class="frm-row"><label class="frm-label">Heure début</label><input type="time" class="frm-input" value="${m?.horaire_debut||'08:00'}"></div>
-      <div class="frm-row"><label class="frm-label">Heure fin</label><input type="time" class="frm-input" value="${m?.horaire_fin||'10:00'}"></div>
+      <div class="frm-row"><label class="frm-label">Heure début</label><input type="time" class="frm-input mission-debut" value="${m?.horaire_debut||'08:00'}"></div>
+      <div class="frm-row"><label class="frm-label">Heure fin</label><input type="time" class="frm-input mission-fin" value="${m?.horaire_fin||'10:00'}"></div>
     </div>
   </div>`;
 }
