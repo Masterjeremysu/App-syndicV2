@@ -690,32 +690,74 @@ function _editZoneModal(id) {
 }
 
 // ── POINTAGE MANUEL ───────────────────────────────────────────────────────────
+// ── POINTAGE MANUEL ───────────────────────────────────────────────────────────
 function openPointageManuel(preselectId=null) {
-  const pOpts=_regPrestas.map(p=>`<option value="${p.id}" ${p.id===preselectId?'selected':''}>${_esc(p.nom)}</option>`).join('');
-  const zOpts=_regZones.map(z=>`<option value="${z.id}">${_esc(z.nom)}</option>`).join('');
+  // Ajout d'une option vide par défaut pour forcer le choix
+  const pOpts = `<option value="" disabled ${!preselectId?'selected':''}>-- Sélectionner un prestataire --</option>` +
+    _regPrestas.map(p=>`<option value="${p.id}" ${p.id===preselectId?'selected':''}>${_esc(p.nom)}</option>`).join('');
+  
+  const zOpts = `<option value="" disabled selected>-- Sélectionner une zone --</option>` +
+    _regZones.map(z=>`<option value="${z.id}">${_esc(z.nom)}</option>`).join('');
+  
   const now=new Date(),hhmm=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,today=now.toISOString().slice(0,10);
+  
   const body=`
-    <div class="frm-row"><label class="frm-label">Prestataire</label><select class="frm-input frm-select" id="pm-presta">${pOpts}</select></div>
-    <div class="frm-row"><label class="frm-label">Zone</label><select class="frm-input frm-select" id="pm-zone">${zOpts}</select></div>
+    <div style="margin-bottom:18px;padding:12px 16px;background:rgba(var(--primary-rgb),.05);border:1px solid rgba(var(--primary-rgb),.15);border-radius:12px;font-size:13px;color:var(--text-2);line-height:1.5;">
+      ${_ico('clock', 16)} <strong>Saisie de rattrapage</strong><br>Outil réservé au Conseil Syndical pour régulariser un oubli de scan ou une intervention exceptionnelle.
+    </div>
+    <div class="frm-row"><label class="frm-label">Prestataire *</label><select class="frm-input frm-select" id="pm-presta">${pOpts}</select></div>
+    <div class="frm-row"><label class="frm-label">Zone d'intervention *</label><select class="frm-input frm-select" id="pm-zone">${zOpts}</select></div>
     <div class="frm-grid2">
-      <div class="frm-row"><label class="frm-label">Date</label><input type="date" class="frm-input" id="pm-date" value="${today}"></div>
+      <div class="frm-row"><label class="frm-label">Date *</label><input type="date" class="frm-input" id="pm-date" value="${today}"></div>
       <div></div>
     </div>
     <div class="frm-grid2">
-      <div class="frm-row"><label class="frm-label">Arrivée</label><input type="time" class="frm-input" id="pm-arr" value="08:00"></div>
-      <div class="frm-row"><label class="frm-label">Départ</label><input type="time" class="frm-input" id="pm-dep" value="${hhmm}"></div>
+      <div class="frm-row"><label class="frm-label">Heure Arrivée *</label><input type="time" class="frm-input" id="pm-arr" value="08:00"></div>
+      <div class="frm-row"><label class="frm-label">Heure Départ *</label><input type="time" class="frm-input" id="pm-dep" value="${hhmm}"></div>
     </div>
-    <div class="frm-row"><label class="frm-label">Nom intervenant</label><input class="frm-input" id="pm-nom" placeholder="Prénom NOM"></div>
-    <div class="frm-row"><label class="frm-label">Observations</label><textarea class="frm-input frm-textarea" id="pm-note" placeholder="Ex: Intervention suite à fuite d'eau…"></textarea></div>`;
+    <div class="frm-row"><label class="frm-label">Nom intervenant</label><input class="frm-input" id="pm-nom" placeholder="Ex: Jean (facultatif)"></div>
+    <div class="frm-row"><label class="frm-label">Observations</label><textarea class="frm-input frm-textarea" id="pm-note" placeholder="Ex: Intervention exceptionnelle suite à une fuite, oubli de scanner..."></textarea></div>`;
+  
   _modal('Saisir un passage manuel',body,'Valider le pointage',async()=>{
+    const prestaId = document.getElementById('pm-presta')?.value;
+    const zoneId = document.getElementById('pm-zone')?.value;
+
+    // 1. VERROU DE SÉCURITÉ
+    if(!prestaId || !zoneId) {
+      alert('Veuillez sélectionner un prestataire et une zone.');
+      return false;
+    }
+
     const btn=document.getElementById('reg-modal-confirm');
     if(btn){btn.disabled=true;btn.textContent='Enregistrement…';}
+
     const date=document.getElementById('pm-date')?.value||today;
-    const prestaId=document.getElementById('pm-presta')?.value;
     const presta=_regPrestas.find(p=>p.id===prestaId);
+
+    // 2. 🔥 INTELLIGENCE ARTIFICIELLE : Trouver la bonne mission associée à la zone
+    let missionId = null;
+    if (presta && presta.missions) {
+      const missionMatch = presta.missions.find(m => (m.zones || []).includes(zoneId));
+      if (missionMatch) {
+        missionId = missionMatch.id; // On a trouvé la mission exacte !
+      } else if (presta.missions.length > 0) {
+        missionId = presta.missions[0].id; // Fallback sur la 1ère mission si intervention exceptionnelle
+      }
+    }
+
     try{
-      await dbPointageManuel({copro_id:_coproId(),prestataire_id:prestaId,mission_id:presta?.missions?.[0]?.id||null,zone_id:document.getElementById('pm-zone')?.value,arrivee:`${date}T${document.getElementById('pm-arr')?.value}:00`,depart:`${date}T${document.getElementById('pm-dep')?.value}:00`,nom_intervenant:document.getElementById('pm-nom')?.value||'',note:document.getElementById('pm-note')?.value||''});
-      if(typeof toast==='function')toast('Pointage enregistré','ok');
+      await dbPointageManuel({
+        copro_id:_coproId(),
+        prestataire_id: prestaId,
+        mission_id: missionId,
+        zone_id: zoneId,
+        arrivee:`${date}T${document.getElementById('pm-arr')?.value}:00`,
+        depart:`${date}T${document.getElementById('pm-dep')?.value}:00`,
+        nom_intervenant:document.getElementById('pm-nom')?.value||'',
+        note:document.getElementById('pm-note')?.value||''
+      });
+      
+      if(typeof toast==='function')toast('Pointage manuel enregistré','ok');
       _regPassages=await dbGetPassages(_coproId());
       _renderAlerts();_renderStats();_renderHistoriqueRows();
     }catch(err){
@@ -724,6 +766,34 @@ function openPointageManuel(preselectId=null) {
       return false;
     }
   });
+
+  // 3. UX BONUS : Mettre en avant les zones habituelles du prestataire
+  const pSel = document.getElementById('pm-presta');
+  const zSel = document.getElementById('pm-zone');
+  
+  if(pSel && zSel) {
+    pSel.addEventListener('change', () => {
+      const p = _regPrestas.find(x => x.id === pSel.value);
+      if(!p) return;
+      
+      // On récolte tous les IDs des zones liées aux missions de ce prestataire
+      const linkedZoneIds = new Set();
+      (p.missions || []).forEach(m => (m.zones || []).forEach(zId => linkedZoneIds.add(zId)));
+
+      Array.from(zSel.options).forEach(opt => {
+        if(opt.value === "") return;
+        if(linkedZoneIds.has(opt.value)) {
+          opt.textContent = `★ ${_regZoneLoc(opt.value)?.nom}`;
+          opt.style.fontWeight = 'bold';
+        } else {
+          opt.textContent = _regZoneLoc(opt.value)?.nom;
+          opt.style.fontWeight = 'normal';
+        }
+      });
+    });
+    // Déclencher le tri visuel tout de suite si on a cliqué depuis la carte prestataire
+    if(preselectId) pSel.dispatchEvent(new Event('change'));
+  }
 }
 
 // ── MODAL ─────────────────────────────────────────────────────────────────────
