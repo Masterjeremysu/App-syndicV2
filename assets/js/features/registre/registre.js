@@ -501,7 +501,7 @@ function _renderPrestataires() {
       </div>
       <div class="presta-card-footer">
         <button class="reg-btn reg-btn-secondary reg-btn-sm" style="flex:1" onclick="openHistoriquePresta('${p.id}')">${_ico('doc',13)} Historique</button>
-        <button class="reg-btn reg-btn-sm" style="flex:1;background:${_esc(p.couleur)};color:white;border-color:${_esc(p.couleur)}" onclick="openPointageManuel('${_esc(p.nom).replace(/'/g,"\\'")}')">${_ico('clock',13)} Badger</button>
+        <button class="reg-btn reg-btn-sm" style="flex:1;background:${p.couleur};color:white;border-color:${p.couleur}" onclick="openPointageManuel('${p.nom.replace(/'/g, "\\'")}')">${_ico('clock',13)} Badger</button>
       </div>
     </div>`).join('')}</div>`;
 }
