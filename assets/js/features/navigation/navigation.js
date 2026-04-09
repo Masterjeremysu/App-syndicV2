@@ -5,19 +5,32 @@
 
 function nav(page, noClose, isBackNavigation = false) {
   // 1. CLEANUP — Destruction propre avant de quitter une page
-  if (typeof currentPage !== 'undefined' && currentPage === 'map' && page !== 'map') {
-    const mapEl = $('map');
-    if (mapEl?._resizeObserver) mapEl._resizeObserver.disconnect();
-    if (typeof mapInstance !== 'undefined' && mapInstance) { 
-      mapInstance.remove(); 
-      mapInstance = null; 
-      if (typeof mapMarkers !== 'undefined') mapMarkers = []; 
+  if (typeof currentPage !== 'undefined') {
+    // Nettoyage de la Carte
+    if (currentPage === 'map' && page !== 'map') {
+      const mapEl = $('map');
+      if (mapEl?._resizeObserver) mapEl._resizeObserver.disconnect();
+      if (typeof mapInstance !== 'undefined' && mapInstance) { 
+        mapInstance.remove(); 
+        mapInstance = null; 
+        if (typeof mapMarkers !== 'undefined') mapMarkers = []; 
+      }
+    }
+    
+    // 🔥 FIX REGISTRE : Nettoyage de la connexion Realtime
+    if (currentPage === 'registre' && page !== 'registre') {
+      if (typeof _realtimeChan !== 'undefined' && _realtimeChan) {
+        if (typeof unsubscribePassages === 'function') {
+          unsubscribePassages(_realtimeChan);
+        }
+        _realtimeChan = null;
+      }
     }
   }
 
   currentPage = page;
   if (!noClose) closeSidebar();
-
+  
   // 2. GESTION DU LAYOUT (Padding / MaxWidth)
   const pageEl = $('page');
   if (!pageEl) return;
