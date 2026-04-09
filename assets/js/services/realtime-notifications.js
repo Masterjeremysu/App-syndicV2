@@ -244,8 +244,13 @@ async function clickNotif(notifId, type, refId) {
   _notifCache = _notifCache.filter(n => n.id !== notifId);
   refreshNotifBadge();
   
-  // 2. Requête serveur en arrière-plan
-  sb.from('notifications').update({ lu: true }).eq('id', notifId).catch(console.warn);
+  // 2. Requête serveur en arrière-plan (CORRIGÉ : .then() au lieu de .catch() direct)
+  sb.from('notifications')
+    .update({ lu: true })
+    .eq('id', notifId)
+    .then(({ error }) => {
+      if (error) console.warn('Erreur update notif:', error);
+    });
   
   // 3. ROUTAGE INTELLIGENT
   if (!refId || typeof nav !== 'function') return;
@@ -265,7 +270,6 @@ async function clickNotif(notifId, type, refId) {
       case 'message_prive':
       case 'message_canal':
         nav('messages');
-        // TODO: Ajouter une logique d'ouverture de canal spécifique si géré dans messages.js
         break;
         
       case 'vote':
