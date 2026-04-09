@@ -10,6 +10,26 @@ const PERM_ROLE_LABELS = {
   membre_cs: 'Conseil Syndical',
   'copropriétaire': 'Résident / Copro',
 };
+const PERM_MODULE_LABELS = {
+  dashboard:   'Tableau de bord',
+  tickets:     'Signalements',
+  map:         'Carte & Plan',
+  messages:    'Messagerie',
+  annonces:    'Annonces',
+  agenda:      'Agenda',
+  contacts:    'Contacts',
+  faq:         'FAQ',
+  documents:   'Documents',
+  votes:       'Votes / AG',
+  rapport:     'Rapports',
+  contrats:    'Contrats',
+  cles:        'Gestion des Clés',
+  journal:     'Journal d\'audit',
+  users:       'Utilisateurs',
+  admin:       'Administration',
+  registre:    'Registre d\'intervention',
+  permissions: 'Permissions'
+};
 
 // Actions possibles pour chaque module
 const ACTIONS_META = {
