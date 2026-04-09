@@ -1026,52 +1026,81 @@ async function renderScanPage(token) {
   }
 }
 async function _handleScan(zoneId, type, coproId) {
-  const nomIntervenant = document.getElementById('scan-nom').value;
+  const nomIntervenant = document.getElementById('scan-nom')?.value || 'Anonyme';
   const btn = document.getElementById('scan-btn');
+  const page = document.getElementById('page'); // Pour l'affichage du succès final
   const oldText = btn.innerText;
   
+  // Mise en chargement du bouton
   btn.innerText = "Enregistrement...";
   btn.disabled = true;
 
   try {
-    // 1. Récupération du prestataire de la zone
-    const { data: zoneData } = await sb
+    // 1. Récupération du prestataire lié à la zone
+    const { data: zoneData, error: zoneErr } = await sb
       .from('zones')
       .select('prestataire_id')
       .eq('id', zoneId)
       .single();
 
+    if (zoneErr || !zoneData?.prestataire_id) {
+      throw new Error("Cette zone n'est pas configurée pour un prestataire spécifique.");
+    }
+
     if (type === 'arrivee') {
-      // 🟢 ARRIVÉE : On crée une nouvelle ligne
-      const { error } = await sb.from('passages').insert({
+      // 🟢 ACTION : ARRIVÉE
+      // On crée une nouvelle ligne avec le statut 'en_cours'
+      const { error: insErr } = await sb.from('passages').insert({
         zone_id: zoneId,
         copro_id: coproId,
         prestataire_id: zoneData.prestataire_id,
         nom_intervenant: nomIntervenant,
         arrivee: new Date().toISOString(),
-        status: 'en_cours' // On marque que la mission commence
+        status: 'en_cours'
       });
-      if (error) throw error;
-    } 
-    else {
-      // 🔴 DÉPART : On met à jour la ligne qui est "en_cours"
-      const { error } = await sb.from('passages')
+
+      if (insErr) throw insErr;
+
+      // Feedback et recharge pour afficher le bouton "Départ"
+      alert("✅ Arrivée enregistrée. Bon courage !");
+      window.location.reload();
+
+    } else {
+      // 🔴 ACTION : DÉPART
+      // On met à jour la ligne 'en_cours' pour cette zone
+      const { error: updErr } = await sb.from('passages')
         .update({ 
           depart: new Date().toISOString(), 
-          status: 'termine' // On ferme la mission
+          status: 'termine' 
         })
         .eq('zone_id', zoneId)
-        .eq('status', 'en_cours'); // 🎯 On cible uniquement la mission ouverte
-        
-      if (error) throw error;
+        .eq('status', 'en_cours'); // Sécurité : on ne ferme que ce qui est ouvert
+
+      if (updErr) throw updErr;
+
+      // 🎯 LE KICK : Écran de succès final (on vide la page)
+      page.innerHTML = `
+        <div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px; text-align:center; background:#f9fafb; font-family:sans-serif;">
+          <div style="width:80px; height:80px; background:#22C55E; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; margin-bottom:24px; box-shadow:0 15px 30px rgba(34,197,94,0.25);">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <h1 style="font-size:26px; font-weight:900; color:#1e293b; margin:0 0 10px;">Mission terminée !</h1>
+          <p style="font-size:16px; color:#64748b; line-height:1.5; margin-bottom:30px;">
+            Merci ${_esc(nomIntervenant)},<br>votre passage a bien été enregistré.
+          </p>
+          <button onclick="window.close();" style="background:white; border:1px solid #e2e8f0; padding:12px 24px; border-radius:12px; font-weight:700; color:#475569; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+            Fermer l'onglet
+          </button>
+          <div style="margin-top:40px; font-size:11px; color:#cbd5e1; font-weight:600; text-transform:uppercase; letter-spacing:0.1em;">
+            Propulsé par CoproSync
+          </div>
+        </div>
+      `;
     }
 
-    alert("✅ Passage enregistré !");
-    window.location.reload();
-
   } catch (error) {
-    console.error(error);
-    alert("Erreur : " + error.message);
+    console.error("Erreur Scan:", error);
+    alert("❌ Erreur : " + error.message);
     btn.innerText = oldText;
     btn.disabled = false;
   }
