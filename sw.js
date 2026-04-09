@@ -1,5 +1,5 @@
-// CoproSync Service Worker v4 PRO — Cache SPA & Push Notifications
-const CACHE_NAME = 'coprosync-v4';
+// CoproSync Service Worker v5 PRO — Cache SPA & Push Notifications
+const CACHE_NAME = 'coprosync-v5'; // <-- BUMP VERSION POUR PURGER L'ANCIEN CACHE
 const CORE_ASSETS = [
   '/',
   '/index.html',
@@ -18,7 +18,7 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
-  // Nettoie les anciens caches
+  // Nettoie TOUS les anciens caches (ex: v4)
   e.waitUntil(
     caches.keys().then(keys => Promise.all(
       keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
@@ -36,41 +36,41 @@ self.addEventListener('fetch', e => {
   // Ignorer les requêtes d'extension Chrome
   if (url.protocol === 'chrome-extension:') return;
 
-  // 2. Navigation SPA (Fix pour les URL du type /?p=map)
-  // Si c'est une requête de navigation, on retourne TOUJOURS l'index.html
+  // 2. Navigation SPA (index.html) -> NETWORK FIRST (Toujours avoir la dernière version de l'app)
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      caches.match('/index.html').then(cachedResponse => {
-        return cachedResponse || fetch(e.request);
+      fetch(e.request).then(networkResponse => {
+        return caches.open(CACHE_NAME).then(cache => {
+          cache.put(e.request, networkResponse.clone());
+          return networkResponse;
+        });
       }).catch(() => {
-        return caches.match('/');
+        // Si hors-ligne, on fallback sur le cache
+        return caches.match('/index.html');
       })
     );
     return;
   }
 
-  // 3. Stale-While-Revalidate pour les assets (CSS, JS, Images)
+  // 3. Assets (JS, CSS, Images) -> VRAI Stale-While-Revalidate
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(cachedResponse => {
-      if (cachedResponse) return cachedResponse;
-
-      // S'il n'est pas dans le cache, on le télécharge
-      return fetch(e.request).then(networkResponse => {
-        // Ne mettre en cache que les vrais fichiers valides
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-          return networkResponse;
+      // On lance la requête réseau en tâche de fond pour mettre à jour le cache
+      const fetchPromise = fetch(e.request).then(networkResponse => {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(e.request, networkResponse.clone());
+          });
         }
-
-        // Clonage car on ne peut utiliser une response qu'une seule fois
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then(cache => {
-          cache.put(e.request, responseToCache);
-        });
-
         return networkResponse;
       }).catch(error => {
         console.warn('[SW] Fetch failed:', error);
       });
+
+      // On retourne le cache DIRECTEMENT s'il existe (hyper rapide)
+      // ET la requête en fond (fetchPromise) va mettre à jour le cache pour le coup d'après !
+      // S'il n'y a pas de cache, on attend le fetch (premier chargement).
+      return cachedResponse || fetchPromise;
     })
   );
 });
