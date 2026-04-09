@@ -473,26 +473,54 @@ function openValidationManuelle(id) {
 }
 
 // ── PRESTATAIRES ──────────────────────────────────────────────────────────────
+// ── PRESTATAIRES ──────────────────────────────────────────────────────────────
 function _renderPrestataires() {
   const el=document.getElementById('reg-tab-prestataires'); if(!el)return;
   const addBtn=`<div style="display:flex;justify-content:flex-end;margin-bottom:18px"><button class="reg-btn reg-btn-primary" onclick="openEditPresta(null)">${_ico('plus')} Ajouter un prestataire</button></div>`;
+  
   if(!_regPrestas.length){
     el.innerHTML=addBtn+`<div class="reg-empty">${_ico('user',40)}<p>Aucun prestataire</p></div>`;return;
   }
+  
   el.innerHTML=addBtn+`<div class="reg-prestas-grid">${_regPrestas.map(p=>`
     <div class="presta-card">
       <div class="presta-card-top">
         <div class="presta-card-header">
           <div class="presta-ava" style="background:${_esc(p.couleur)};box-shadow:0 6px 16px ${_esc(p.couleur)}44">${_esc(p.nom).substring(0,2).toUpperCase()}</div>
-          <div style="flex:1;min-width:0"><div class="presta-nom">${_esc(p.nom)}</div><div class="presta-contrat">${(p.missions||[]).map(m=>_esc(m.label)).join(' · ')||'Aucune mission'}</div></div>
+          <div style="flex:1;min-width:0">
+            <div class="presta-nom">${_esc(p.nom)}</div>
+            <div class="presta-contrat" style="color:var(--text-3);font-size:12px;font-weight:600">${p.siret ? 'SIRET: '+_esc(p.siret) : (p.missions?.length ? p.missions.length + ' mission(s)' : 'Prestataire')}</div>
+          </div>
           <button class="reg-btn-icon" onclick="openEditPresta('${p.id}')">${_ico('edit',15)}</button>
         </div>
-        <div class="presta-missions">
+        
+        <div class="presta-missions" style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px">
           ${(p.missions||[]).map(m=>{
-            const zn=(m.zones||[]).map(zid=>_esc(_regZoneLoc(zid)?.nom||zid)).join(', ');
-            return `<div class="presta-mission-row"><div><div class="presta-mission-name">${_esc(m.label)}</div><div class="presta-mission-meta">${zn} · ${m.horaire_debut||'?'}–${m.horaire_fin||'?'}</div></div><span class="presta-mission-freq">${_esc(m.frequence)}</span></div>`;
-          }).join('')||'<div style="font-size:13px;color:var(--text-3);padding:8px">Aucune mission</div>'}
+            
+            // Génération des petites pilules pour les zones
+            const znArray = (m.zones||[]).map(zid => {
+               const zObj = _regZoneLoc(zid);
+               return zObj ? `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-2);padding:3px 7px;border-radius:6px;font-size:10.5px;font-weight:600;color:var(--text-2);border:1px solid var(--border)">${_ico(zObj.icone, 11)} ${_esc(zObj.nom)}</span>` : '';
+            }).filter(Boolean);
+            
+            const znHtml = znArray.length 
+                ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px">${znArray.join('')}</div>` 
+                : '<div style="font-size:11px;color:var(--text-3);margin-top:4px;margin-bottom:4px">Aucune zone assignée</div>';
+
+            return `
+            <div style="padding:12px 14px;background:var(--bg-1);border-radius:12px;border:1px solid var(--border);display:flex;flex-direction:column;gap:2px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div style="font-size:13px;font-weight:800;color:var(--text-1)">${_esc(m.label)}</div>
+                <span style="font-size:10.5px;font-weight:800;color:var(--primary);background:rgba(var(--primary-rgb),.1);padding:3px 8px;border-radius:6px;white-space:nowrap">${_esc(m.frequence)}</span>
+              </div>
+              ${znHtml}
+              <div style="font-size:11.5px;font-weight:600;color:var(--text-3);display:flex;align-items:center;gap:5px;margin-top:2px">
+                ${_ico('clock', 12)} ${m.horaire_debut||'?'} – ${m.horaire_fin||'?'}
+              </div>
+            </div>`;
+          }).join('')||'<div style="font-size:13px;color:var(--text-3);padding:8px;text-align:center;background:var(--bg-1);border-radius:10px;border:1px dashed var(--border)">Aucune mission enregistrée</div>'}
         </div>
+
         <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:16px">
           ${p.telephone?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--text-2)">${_ico('phone',13)}<a href="tel:${_esc(p.telephone).replace(/\s/g,'')}" style="color:inherit;text-decoration:none">${_esc(p.telephone)}</a></div>`:''}
           ${p.email?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--text-2)">${_ico('mail',13)}<a href="mailto:${_esc(p.email)}" style="color:var(--primary);text-decoration:none">${_esc(p.email)}</a></div>`:''}
