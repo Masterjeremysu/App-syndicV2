@@ -822,32 +822,33 @@ async function loadDashboardWidgets() {
       .forEach(e=>pushNotif('📅 Rappel',e.titre+' — demain à '+new Date(e.date_debut).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),'statut_change',null));
   }
 
-  // Annonces (🔥 FIX ARCHIVES)
-  // On limite à 20 au lieu de 12 pour être sûr d'en avoir 3 même si plusieurs sont archivées
-  const {data:annsRaw}=await sb.from('annonces').select('*').order('epingle',{ascending:false}).order('created_at',{ascending:false}).limit(20);
+  // ── ANNONCES (Filtre anti-archives agressif) ──
+  const {data:annsRaw} = await sb.from('annonces').select('*').order('epingle',{ascending:false}).order('created_at',{ascending:false}).limit(20);
   
-  const anns=(annsRaw||[])
+  const anns = (annsRaw || [])
     .filter(a => typeof annonceReaderCanSee === 'function' ? annonceReaderCanSee(a) : true)
-    // 🔥 Le filtre Magique : on exclut celles qui ont le statut 'archive'
+    // 🔥 FILTRE ABSOLU : On vérifie TOUTES les variations possibles du statut archive
     .filter(a => {
-       const st = (a.statut || a.etat || '').toLowerCase();
-       return st !== 'archive' && st !== 'archivé';
+       if (a.archive === true || a.is_archived === true) return false;
+       const st = String(a.statut || a.status || a.etat || '').toLowerCase();
+       if (st.includes('archiv')) return false; // Bloque "archive", "archivé", "archived"
+       return true;
     })
-    .slice(0,3);
+    .slice(0, 3); // On n'en garde que 3 pour le dashboard
 
-  const annEl=$('dash-annonces-list');
-  if(annEl){
-    if(!anns.length){
-      annEl.innerHTML='<div class="d5-empty">Aucune annonce</div>';
+  const annEl = $('dash-annonces-list');
+  if (annEl) {
+    if (!anns.length) {
+      annEl.innerHTML = '<div class="d5-empty">Aucune annonce</div>';
     } else {
-      annEl.className='';
-      const icos={urgent:'🚨',important:'⚠️',info:'📢'};
-      annEl.innerHTML=anns.map(a=>
+      annEl.className = '';
+      const icos = { urgent: '🚨', important: '⚠️', info: '📢' };
+      annEl.innerHTML = anns.map(a =>
         '<div class="d5-row" onclick="nav(\'annonces\')">'
-        +'<div class="d5-row-ico">'+(a.epingle?'📌':(icos[a.type]||'📢'))+'</div>'
-        +'<div class="d5-row-body"><div class="d5-row-title">'+_e(a.titre)+'</div>'
-        +(a.contenu?'<div class="d5-row-sub">'+_e(a.contenu.substring(0,60))+(a.contenu.length>60?'…':'')+'</div>':'')
-        +'</div>'+(a.epingle?'<span class="d5-pill d5-pill-n">\u00c9pingl\u00e9</span>':'')+'</div>'
+        +'<div class="d5-row-ico">' + (a.epingle ? '📌' : (icos[a.type] || '📢')) + '</div>'
+        +'<div class="d5-row-body"><div class="d5-row-title">' + _e(a.titre) + '</div>'
+        +(a.contenu ? '<div class="d5-row-sub">' + _e(a.contenu.substring(0,60)) + (a.contenu.length>60?'…':'') + '</div>' : '')
+        +'</div>' + (a.epingle ? '<span class="d5-pill d5-pill-n">Épinglé</span>' : '') + '</div>'
       ).join('');
     }
   }
