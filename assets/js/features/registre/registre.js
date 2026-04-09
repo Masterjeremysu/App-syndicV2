@@ -217,8 +217,9 @@ function _regSince(iso) {
 }
 function _ico(name,size=18) {
   const i={
+    const i={
+    search:`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`,
     trash:`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>`,
-    door:`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9v11a1 1 0 001 1h16a1 1 0 001-1V9"/><polyline points="1 9 12 2 23 9"/></svg>`,
     car:`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,
     leaf:`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 22c0-9 8-16 18-16-1 9-9 16-18 16z"/><path d="M2 22s4-4 10-7"/></svg>`,
     wrench:`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>`,
@@ -660,31 +661,93 @@ async function openHistoriquePresta(id) {
     const bodyEl=document.querySelector('#reg-modal .mb'); if(bodyEl)bodyEl.innerHTML=`<div class="reg-empty">${_ico('warn',36)}<p>Erreur : ${_esc(err.message)}</p></div>`;
   }
 }
-
+// ── ZONES QR ──────────────────────────────────────────────────────────────────
+window.filterZones = function(val) {
+  const term = (val || '').toLowerCase().trim();
+  document.querySelectorAll('#reg-zones-grid-container .zone-card').forEach(card => {
+    const nom = card.getAttribute('data-nom') || '';
+    card.style.display = nom.includes(term) ? 'flex' : 'none';
+  });
+};
 // ── ZONES QR ──────────────────────────────────────────────────────────────────
 function _renderZones() {
   const el=document.getElementById('reg-tab-zones'); if(!el)return;
-  el.innerHTML=`
-    <div style="margin-bottom:18px;padding:14px 18px;background:var(--bg-1);border:1px solid var(--border);border-radius:12px;font-size:13px;color:var(--text-2);font-weight:600;line-height:1.6">
-      ${_ico('qr',15)} Chaque zone a un QR Code unique. Collez-le sur place. Le prestataire scanne à l'<strong>arrivée</strong> et au <strong>départ</strong> — sans compte requis.
+  
+  // Barre de recherche + Bouton d'ajout
+  const headerHtml = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:14px">
+      <div style="position:relative;flex:1;min-width:250px;max-width:380px">
+        <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-3)">${_ico('search', 16)}</span>
+        <input type="text" placeholder="Rechercher une zone..." onkeyup="filterZones(this.value)" 
+          style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 14px 10px 38px;font-size:14px;color:var(--text-1);outline:none;transition:all 0.2s;box-sizing:border-box;font-family:var(--font-body);"
+          onfocus="this.style.borderColor='var(--primary)';this.style.boxShadow='0 0 0 3px rgba(var(--primary-rgb),.1)'"
+          onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+      </div>
+      <button class="reg-btn reg-btn-primary" onclick="openAjouterZone()">${_ico('plus')} Nouvelle zone</button>
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:18px">
-      <button class="reg-btn reg-btn-primary" onclick="openAjouterZone()">${_ico('plus')} Ajouter une zone</button>
-    </div>
-    <div class="reg-zones-grid">
-      ${_regZones.map(z=>{
-        const dp=_regPassages.filter(p=>p.zone_id===z.id).sort((a,b)=>new Date(b.arrivee)-new Date(a.arrivee))[0];
-        return `<div class="zone-card">
-          <div class="zone-card-header"><div class="zone-ico">${_ico(z.icone,20)}</div><span class="zone-token">${_esc(z.qr_token).slice(-8)}</span></div>
-          <div class="zone-name">${_esc(z.nom)}</div>
-          <div class="zone-lastpass">${dp?`Dernier passage : ${_regFmtDate(dp.arrivee)}`:'Aucun passage enregistré'}</div>
-          <div class="zone-actions">
-            <button class="reg-btn reg-btn-secondary reg-btn-sm" style="flex:1" onclick="openQrZone('${z.id}')">${_ico('qr',13)} Affiche QR</button>
-            <button class="reg-btn reg-btn-secondary reg-btn-sm" style="flex:1" onclick="openEditZone('${z.id}')">${_ico('edit',13)} Modifier</button>
+  `;
+
+  if(!_regZones.length){
+    el.innerHTML = headerHtml + `<div class="reg-empty">${_ico('qr',44)}<p>Aucune zone QR configurée</p><span>Créez une zone pour générer un QR Code d'intervention.</span></div>`;
+    return;
+  }
+
+  // Génération des cartes ultra-clean
+  const cardsHtml = _regZones.map(z => {
+    const zonePassages = _regPassages.filter(p=>p.zone_id===z.id);
+    const dp = zonePassages.sort((a,b)=>new Date(b.arrivee)-new Date(a.arrivee))[0];
+    const passCount = zonePassages.length;
+    
+    const dpDate = dp ? new Date(dp.arrivee) : null;
+    const isToday = dpDate && dpDate.toDateString() === new Date().toDateString();
+
+    return `
+    <div class="zone-card" data-nom="${_esc(z.nom).toLowerCase()}" style="position:relative;display:flex;flex-direction:column;justify-content:space-between;min-height:200px;padding:22px;">
+      
+      <button type="button" onclick="openEditZone('${z.id}')" title="Modifier la zone" style="position:absolute;top:16px;right:16px;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-2);transition:all 0.15s" onmouseover="this.style.color='var(--text-1)';this.style.borderColor='var(--border-strong)'" onmouseout="this.style.color='var(--text-2)';this.style.borderColor='var(--border)'">
+        ${_ico('edit', 14)}
+      </button>
+      
+      <div style="flex:1">
+        <div style="width:48px;height:48px;border-radius:14px;background:rgba(var(--primary-rgb),.08);color:var(--primary);display:flex;align-items:center;justify-content:center;margin-bottom:16px;border:1px solid rgba(var(--primary-rgb),.15)">
+          ${_ico(z.icone, 22)}
+        </div>
+        
+        <div class="zone-name" style="font-size:17px;margin-bottom:6px;line-height:1.2;padding-right:24px;">${_esc(z.nom)}</div>
+        <div style="font-family:monospace;font-size:10px;color:var(--text-3);background:var(--bg-2);padding:3px 8px;border-radius:6px;border:1px solid var(--border);display:inline-flex;align-items:center;gap:4px;margin-bottom:16px">
+          ${_ico('qr', 10)} ${_esc(z.qr_token).slice(-8)}
+        </div>
+        
+        <div style="display:flex;flex-direction:column;gap:8px;padding-top:14px;border-top:1px dashed var(--border);margin-bottom:20px">
+          <div style="font-size:12px;font-weight:600;color:var(--text-2);display:flex;align-items:center;justify-content:space-between">
+            <span>Passages enregistrés</span>
+            <span style="color:var(--text-1);font-weight:800;background:var(--bg-1);padding:2px 6px;border-radius:6px;border:1px solid var(--border)">${passCount}</span>
           </div>
-        </div>`;
-      }).join('')}
+          <div style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:6px;font-weight:500">
+            ${dp 
+              ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${isToday?'var(--green)':'var(--text-3)'};box-shadow:0 0 6px ${isToday?'var(--green)':'transparent'}"></span> Dernier : ${_regFmtDate(dp.arrivee)} à ${_regFmt(dp.arrivee)}` 
+              : `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--border)"></span> Aucun passage`
+            }
+          </div>
+        </div>
+      </div>
+      
+      <button class="reg-btn" style="width:100%;justify-content:center;background:var(--text-1);color:var(--bg-1);border:none;padding:12px;font-size:13px;border-radius:12px;transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);box-shadow:0 4px 12px rgba(0,0,0,0.1);" onmouseover="this.style.opacity='0.9';this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 16px rgba(0,0,0,0.15)'" onmouseout="this.style.opacity='1';this.style.transform='none';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onclick="openQrZone('${z.id}')">
+        ${_ico('print', 15)} Afficher & Imprimer QR
+      </button>
     </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="margin-bottom:24px;padding:14px 18px;background:rgba(34, 197, 94, 0.06);border:1px solid rgba(34, 197, 94, 0.25);border-radius:14px;font-size:13px;color:var(--text-2);line-height:1.5;display:flex;align-items:flex-start;gap:12px">
+      <div style="color:var(--green);flex-shrink:0;margin-top:2px">${_ico('check', 18)}</div>
+      <div>Chaque zone possède un QR Code unique. Les intervenants le scannent à l'<strong>arrivée</strong> et au <strong>départ</strong> avec leur téléphone. <strong>Aucun compte requis, aucune application à installer.</strong></div>
+    </div>
+    ${headerHtml}
+    <div class="reg-zones-grid" id="reg-zones-grid-container">
+      ${cardsHtml}
+    </div>
+  `;
 }
 
 function openQrZone(id) {
