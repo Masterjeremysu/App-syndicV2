@@ -239,16 +239,7 @@ function _ico(name,size=18) {
   return i[name]||i['clock'];
 }
 
-function _qrSvg(text,size=200) {
-  const cells=25,cell=size/cells;
-  let rects='',h=0;
-  for(let i=0;i<text.length;i++){h=(Math.imul(31,h)+text.charCodeAt(i))|0;}
-  const rand=(x,y)=>{let v=(h^(x*374761393+y*668265263))|0;v=Math.imul(v,v);return((v>>>16)&1)===1;};
-  const loc=(ox,oy)=>{for(let r=0;r<7;r++)for(let c=0;c<7;c++){const f=(r===0||r===6||c===0||c===6||(r>=2&&r<=4&&c>=2&&c<=4))?1:0;if(f)rects+=`<rect x="${(ox+c)*cell}" y="${(oy+r)*cell}" width="${cell}" height="${cell}" fill="#111"/>`;}}
-  for(let r=0;r<cells;r++)for(let c=0;c<cells;c++){const inL=(r<8&&c<8)||(r<8&&c>=cells-8)||(r>=cells-8&&c<8);if(!inL&&rand(c,r))rects+=`<rect x="${c*cell}" y="${r*cell}" width="${cell}" height="${cell}" fill="#111"/>`;}
-  loc(0,0);loc(cells-7,0);loc(0,cells-7);
-  return `<svg viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg"><rect width="${size}" height="${size}" fill="white"/>${rects}</svg>`;
-}
+
 
 window.filterZones = function(val) {
   const term = (val || '').toLowerCase().trim();
@@ -746,15 +737,56 @@ function _renderZones() {
 }
 
 function openQrZone(id) {
-  const z=_regZones.find(x=>x.id===id); if(!z)return;
-  const url=`${location.origin}/scan?zone=${z.qr_token}`,svg=_qrSvg(url,220);
-  _modal(`QR Code — ${_esc(z.nom)}`,`<div class="qr-modal-content"><div class="qr-zone-name">${_esc(z.nom)}</div><div class="qr-frame">${svg}</div><div class="qr-url">${_esc(url)}</div><div class="qr-instructions">Scannez à l'<strong>arrivée</strong> et au <strong>départ</strong>.<br>Aucun compte requis.</div></div>`,
-    `${_ico('print',14)} Imprimer`,()=>{
-      const pe=document.getElementById('reg-print-area'); if(!pe)return;
-      pe.style.display='flex';
-      pe.innerHTML=`<div class="pt">Pointage Prestataires</div><div class="ps">${_esc(z.nom)}<br><small style="font-weight:500;color:#9ca3af">Scannez à l'arrivée ET au départ</small></div><div class="pqr">${svg}</div><div class="pu">${_esc(url)}</div><div class="pf">Propulsé par CoproSync</div>`;
-      setTimeout(()=>{window.print();pe.style.display='none';},100);
-    });
+  const z = _regZones.find(x => x.id === id); 
+  if (!z) return;
+  
+  const url = `${location.origin}/scan?zone=${z.qr_token}`;
+  
+  // 🔥 LE CORRECTIF : On utilise une vraie API pour générer un vrai QR Code scannable !
+  const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}&margin=0`;
+  
+  // Image pour la modale (taille moyenne)
+  const imgHtml = `<img src="${qrApiUrl}" width="220" height="220" style="display:block;border-radius:4px;mix-blend-mode:multiply;" alt="QR Code Zone" />`;
+
+  _modal(`QR Code — ${_esc(z.nom)}`,
+    `<div class="qr-modal-content">
+      <div class="qr-zone-name" style="margin-bottom: -10px; font-size: 18px;">${_esc(z.nom)}</div>
+      <div class="qr-frame" style="background:white;padding:24px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,0.06);border:1px solid var(--border);display:flex;justify-content:center;align-items:center;min-height:220px;">
+        ${imgHtml}
+      </div>
+      <div class="qr-url">${_esc(url)}</div>
+      <div class="qr-instructions">Scannez à l'<strong>arrivée</strong> et au <strong>départ</strong>.<br>Aucun compte requis.</div>
+    </div>`,
+    `${_ico('print',14)} Imprimer`,
+    () => {
+      const pe = document.getElementById('reg-print-area'); 
+      if (!pe) return;
+      
+      pe.style.display = 'flex';
+      
+      // Image grande résolution pour l'impression (On déclenche l'impression seulement quand l'image est chargée)
+      const printImgHtml = `<img src="${qrApiUrl}" width="340" height="340" style="display:block;" onload="window.print();document.getElementById('reg-print-area').style.display='none';" />`;
+      
+      // Magnifique mise en page A4 pour plastifier
+      pe.innerHTML = `
+        <div class="pt">Pointage Prestataires</div>
+        <div class="ps">${_esc(z.nom)}<br><small style="font-weight:500;color:#9ca3af">Scannez à l'arrivée ET au départ</small></div>
+        <div class="pqr" style="margin: 30px 0; padding: 24px; background: white; border: 3px dashed #cbd5e1; border-radius: 24px; display:flex; justify-content:center;">
+          ${printImgHtml}
+        </div>
+        <div class="pu" style="font-family:monospace; background:#f3f4f6; padding:10px 20px; border-radius:10px; color:#4b5563; font-size:14px;">${_esc(url)}</div>
+        <div class="pf" style="margin-top:40px; color:#9ca3af; font-weight:700;">Propulsé par CoproSync</div>
+      `;
+        
+      // Sécurité : Si l'image met plus de 2 secondes à charger (mauvaise connexion), on force l'impression quand même.
+      setTimeout(() => { 
+        if (pe.style.display === 'flex') {
+          window.print(); 
+          pe.style.display = 'none'; 
+        }
+      }, 2000);
+    }
+  );
 }
 
 function openAjouterZone(){_editZoneModal(null);}
