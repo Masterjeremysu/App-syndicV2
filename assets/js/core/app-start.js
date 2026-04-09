@@ -203,6 +203,7 @@ async function loadAll() {
     await loadTickets();
     if (currentPage === 'dashboard') renderDashboard();
 
+    // 2. Tâches de fond
     const tasks = [];
     if (Permissions.has('contrats.view'))  tasks.push(loadContrats());
     if (Permissions.has('cles.view'))      tasks.push(loadCles());
@@ -211,32 +212,25 @@ async function loadAll() {
     tasks.push(loadEvenementsCache());
     if (Permissions.has('contacts.view')) tasks.push(loadContactsCache());
 
-    // 🔥 FIX ABSOLU : DOCUMENTS & VOTES
-    // On requête Supabase directement et on inonde toutes les variables de cache possibles
-    // pour être certain que le Dashboard trouve la donnée, peu importe comment il a été codé.
-    tasks.push(sb.from('documents').select('*').order('created_at', {ascending: false}).limit(20).then(({data}) => {
-        if (data) {
-            window._docsCache = data;
-            if (typeof cache !== 'undefined') cache.documents = data;
+    // 🔥 RESTAURATION ANTI-RÉGRESSION : On appelle la VRAIE fonction des votes
+    tasks.push((async () => {
+      try {
+        if (typeof loadVotes === 'function') {
+          await loadVotes();
         }
-    }).catch(e => console.warn('Erreur chargement init documents', e)));
+      } catch(e) {
+        console.warn('[loadAll] Erreur chargement votes:', e);
+      }
+    })());
 
-    tasks.push(sb.from('votes').select('*').order('created_at', {ascending: false}).limit(20).then(({data}) => {
-        if (data) {
-            window._votesCache = data;
-            window._voteCache = data; // Au cas où
-            if (typeof cache !== 'undefined') cache.votes = data;
-        }
-    }).catch(e => console.warn('Erreur chargement init votes', e)));
-
-    // 2. On attend que TOUT soit chargé en arrière-plan
+    // On attend que TOUT soit chargé
     await Promise.all(tasks);
     
-    // 3. Mise à jour de l'UI
+    // 3. Mise à jour de l'UI globale
     updateBadges();
     checkNotifications();
     
-    // 4. On force un dernier rafraîchissement du Dashboard avec les caches pleins
+    // 4. On rafraîchit le Dashboard (les Votes apparaîtront, les Annonces seront filtrées, et les Docs se chargeront seuls)
     if (currentPage === 'dashboard') {
         renderDashboard();
         if (typeof loadDashboardWidgets === 'function') {
