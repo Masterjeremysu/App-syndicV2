@@ -1,10 +1,6 @@
 // ════════════════════════════════════════════════════════════════════════════
 //  REGISTRE D'INTERVENTION — CoproSync Premium
 //  assets/js/features/registre/registre.js
-//
-//  DÉPENDANCES : registre-data.js doit être chargé AVANT ce fichier
-//  CLIENT      : variable globale `sb` (Supabase createClient)
-//  COPRO ID    : lié au profile global ou window._currentCoproId
 // ════════════════════════════════════════════════════════════════════════════
 
 let _regTab       = 'historique';
@@ -136,6 +132,8 @@ let _missionCounter = 10;
     .qr-url{font-family:monospace;font-size:11px;background:var(--bg-2);padding:8px 14px;border-radius:8px;border:1px solid var(--border);color:var(--text-2);word-break:break-all;text-align:center}
     .qr-zone-name{font-size:16px;font-weight:800;color:var(--text-1);text-align:center}
     .qr-instructions{font-size:13px;color:var(--text-3);text-align:center;font-weight:500;line-height:1.6}
+    
+    /* NOUVEAU DESIGN PRESTATAIRE PRO MAX */
     .presta-contact-badges { display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap }
     .presta-c-badge { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; background:var(--bg-2); border:1px solid var(--border); font-size:11px; font-weight:700; color:var(--text-2); text-decoration:none; transition:all .15s }
     .presta-c-badge:hover { background:var(--surface-2); color:var(--text-1); border-color:var(--border-strong) }
@@ -144,6 +142,7 @@ let _missionCounter = 10;
     .presta-missions-scroll::-webkit-scrollbar-track { background:transparent }
     .presta-missions-scroll::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:4px }
     .presta-missions-scroll::-webkit-scrollbar-thumb:hover { background:var(--text-3) }
+    
     @media(max-width:1100px){.reg-stats{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:768px){
       .reg-wrap{padding:18px 16px}
@@ -173,7 +172,6 @@ let _missionCounter = 10;
 
 // ── UTILITAIRES ───────────────────────────────────────────────────────────────
 
-// Sécurise l'affichage DOM contre les failles XSS (cross-site scripting)
 function _esc(str) {
   if (!str) return '';
   return String(str)
@@ -185,7 +183,6 @@ function _esc(str) {
 }
 
 function _coproId() {
-  // 🔥 FIX CRITIQUE: Priorité au profil chargé
   if (typeof profile !== 'undefined' && profile && profile.copro_id) {
     return profile.copro_id;
   }
@@ -215,11 +212,12 @@ function _regSince(iso) {
   if(m<60) return `${m} min`;
   return `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}`;
 }
+
 function _ico(name,size=18) {
   const i={
-    const i={
     search:`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`,
     trash:`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>`,
+    door:`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9v11a1 1 0 001 1h16a1 1 0 001-1V9"/><polyline points="1 9 12 2 23 9"/></svg>`,
     car:`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,
     leaf:`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 22c0-9 8-16 18-16-1 9-9 16-18 16z"/><path d="M2 22s4-4 10-7"/></svg>`,
     wrench:`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>`,
@@ -252,6 +250,14 @@ function _qrSvg(text,size=200) {
   return `<svg viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg"><rect width="${size}" height="${size}" fill="white"/>${rects}</svg>`;
 }
 
+window.filterZones = function(val) {
+  const term = (val || '').toLowerCase().trim();
+  document.querySelectorAll('#reg-zones-grid-container .zone-card').forEach(card => {
+    const nom = card.getAttribute('data-nom') || '';
+    card.style.display = nom.includes(term) ? 'flex' : 'none';
+  });
+};
+
 // ── RENDER PRINCIPAL ──────────────────────────────────────────────────────────
 
 async function renderRegistre() {
@@ -273,7 +279,7 @@ async function renderRegistre() {
         <p class="reg-sub">Temps réel · QR Codes par zone · Validation manuelle</p>
       </div>
       ${mgr?`<div class="reg-header-actions">
-        <button class="reg-btn reg-btn-secondary" onclick="openAjouterZone()">${_ico('qr')} Gérer les zones QR</button>
+        <button class="reg-btn reg-btn-secondary" onclick="setRegistreTab('zones')">${_ico('qr')} Gérer les zones QR</button>
         <button class="reg-btn reg-btn-primary" onclick="openPointageManuel()">${_ico('clock')} Pointage manuel</button>
       </div>`:''}
     </div>
@@ -516,8 +522,6 @@ function _renderPrestataires() {
         
         <div class="presta-missions-scroll" style="flex:1;">
           ${(p.missions||[]).map(m=>{
-            
-            // Génération des mini-pilules pour les zones
             const znArray = (m.zones||[]).map(zid => {
                const zObj = _regZoneLoc(zid);
                return zObj ? `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg-2);padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;color:var(--text-2);border:1px solid var(--border)">${_ico(zObj.icone, 10)} ${_esc(zObj.nom)}</span>` : '';
@@ -548,6 +552,7 @@ function _renderPrestataires() {
       </div>
     </div>`).join('')}</div>`;
 }
+
 function openEditPresta(id) {
   const p=id?_regPrestas.find(x=>x.id===id):null,isNew=!p;
   const body=`<div>
@@ -579,11 +584,9 @@ function openEditPresta(id) {
     const btn=document.getElementById('reg-modal-confirm');
     if(btn){btn.disabled=true;btn.textContent='Enregistrement…';}
     
-    // 🔥 NOUVELLE LOGIQUE PRO : Récupération des données via les Checkboxes et les Classes
     const missions = Array.from(document.querySelectorAll('.frm-mission-block')).map(block => {
       return {
         label: block.querySelector('.mission-label')?.value || '',
-        // On liste toutes les cases cochées de ce bloc précis :
         zones: Array.from(block.querySelectorAll('.mission-zone-cb:checked')).map(cb => cb.value),
         frequence: block.querySelector('.mission-freq')?.value || 'Sur appel',
         horaire_debut: block.querySelector('.mission-debut')?.value || null,
@@ -605,7 +608,6 @@ function openEditPresta(id) {
 }
 
 function _mBlock(m,i) {
-  // 🔥 GÉNÉRATION DES CASES À COCHER : Beaucoup plus fluide pour l'utilisateur
   const zo = _regZones.map(z => `
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-1);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background 0.15s;" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='transparent'">
       <input type="checkbox" value="${z.id}" class="mission-zone-cb" style="width:16px;height:16px;accent-color:var(--primary);cursor:pointer;margin:0;" ${(m?.zones||[]).includes(z.id)?'checked':''}>
@@ -637,6 +639,7 @@ function _mBlock(m,i) {
     </div>
   </div>`;
 }
+
 function addMissionBlock() {
   const list=document.getElementById('ep-missions-list'); if(!list)return;
   const div=document.createElement('div');div.innerHTML=_mBlock(null,_missionCounter++);list.appendChild(div.firstElementChild);
@@ -661,19 +664,12 @@ async function openHistoriquePresta(id) {
     const bodyEl=document.querySelector('#reg-modal .mb'); if(bodyEl)bodyEl.innerHTML=`<div class="reg-empty">${_ico('warn',36)}<p>Erreur : ${_esc(err.message)}</p></div>`;
   }
 }
-// ── ZONES QR ──────────────────────────────────────────────────────────────────
-window.filterZones = function(val) {
-  const term = (val || '').toLowerCase().trim();
-  document.querySelectorAll('#reg-zones-grid-container .zone-card').forEach(card => {
-    const nom = card.getAttribute('data-nom') || '';
-    card.style.display = nom.includes(term) ? 'flex' : 'none';
-  });
-};
-// ── ZONES QR ──────────────────────────────────────────────────────────────────
+
+// ── ZONES QR PRO MAX ──────────────────────────────────────────────────────────
+
 function _renderZones() {
   const el=document.getElementById('reg-tab-zones'); if(!el)return;
   
-  // Barre de recherche + Bouton d'ajout
   const headerHtml = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:14px">
       <div style="position:relative;flex:1;min-width:250px;max-width:380px">
@@ -692,7 +688,6 @@ function _renderZones() {
     return;
   }
 
-  // Génération des cartes ultra-clean
   const cardsHtml = _regZones.map(z => {
     const zonePassages = _regPassages.filter(p=>p.zone_id===z.id);
     const dp = zonePassages.sort((a,b)=>new Date(b.arrivee)-new Date(a.arrivee))[0];
@@ -741,7 +736,7 @@ function _renderZones() {
   el.innerHTML = `
     <div style="margin-bottom:24px;padding:14px 18px;background:rgba(34, 197, 94, 0.06);border:1px solid rgba(34, 197, 94, 0.25);border-radius:14px;font-size:13px;color:var(--text-2);line-height:1.5;display:flex;align-items:flex-start;gap:12px">
       <div style="color:var(--green);flex-shrink:0;margin-top:2px">${_ico('check', 18)}</div>
-      <div>Chaque zone possède un QR Code unique. Les intervenants le scannent à l'<strong>arrivée</strong> et au <strong>départ</strong> avec leur téléphone. <strong>Aucun compte requis, aucune application à installer.</strong></div>
+      <div>Chaque zone possède un QR Code unique. Les intervenants le scannent à l'<strong>arrivée</strong> et au <strong>départ</strong> avec leur téléphone. <strong>Aucun compte requis.</strong></div>
     </div>
     ${headerHtml}
     <div class="reg-zones-grid" id="reg-zones-grid-container">
@@ -793,10 +788,7 @@ function _editZoneModal(id) {
   });
 }
 
-// ── POINTAGE MANUEL ───────────────────────────────────────────────────────────
-// ── POINTAGE MANUEL ───────────────────────────────────────────────────────────
 function openPointageManuel(preselectId=null) {
-  // Ajout d'une option vide par défaut pour forcer le choix
   const pOpts = `<option value="" disabled ${!preselectId?'selected':''}>-- Sélectionner un prestataire --</option>` +
     _regPrestas.map(p=>`<option value="${p.id}" ${p.id===preselectId?'selected':''}>${_esc(p.nom)}</option>`).join('');
   
@@ -826,7 +818,6 @@ function openPointageManuel(preselectId=null) {
     const prestaId = document.getElementById('pm-presta')?.value;
     const zoneId = document.getElementById('pm-zone')?.value;
 
-    // 1. VERROU DE SÉCURITÉ
     if(!prestaId || !zoneId) {
       alert('Veuillez sélectionner un prestataire et une zone.');
       return false;
@@ -838,14 +829,13 @@ function openPointageManuel(preselectId=null) {
     const date=document.getElementById('pm-date')?.value||today;
     const presta=_regPrestas.find(p=>p.id===prestaId);
 
-    // 2. 🔥 INTELLIGENCE ARTIFICIELLE : Trouver la bonne mission associée à la zone
     let missionId = null;
     if (presta && presta.missions) {
       const missionMatch = presta.missions.find(m => (m.zones || []).includes(zoneId));
       if (missionMatch) {
-        missionId = missionMatch.id; // On a trouvé la mission exacte !
+        missionId = missionMatch.id;
       } else if (presta.missions.length > 0) {
-        missionId = presta.missions[0].id; // Fallback sur la 1ère mission si intervention exceptionnelle
+        missionId = presta.missions[0].id;
       }
     }
 
@@ -871,7 +861,6 @@ function openPointageManuel(preselectId=null) {
     }
   });
 
-  // 3. UX BONUS : Mettre en avant les zones habituelles du prestataire
   const pSel = document.getElementById('pm-presta');
   const zSel = document.getElementById('pm-zone');
   
@@ -880,7 +869,6 @@ function openPointageManuel(preselectId=null) {
       const p = _regPrestas.find(x => x.id === pSel.value);
       if(!p) return;
       
-      // On récolte tous les IDs des zones liées aux missions de ce prestataire
       const linkedZoneIds = new Set();
       (p.missions || []).forEach(m => (m.zones || []).forEach(zId => linkedZoneIds.add(zId)));
 
@@ -895,7 +883,6 @@ function openPointageManuel(preselectId=null) {
         }
       });
     });
-    // Déclencher le tri visuel tout de suite si on a cliqué depuis la carte prestataire
     if(preselectId) pSel.dispatchEvent(new Event('change'));
   }
 }
