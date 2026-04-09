@@ -822,9 +822,19 @@ async function loadDashboardWidgets() {
       .forEach(e=>pushNotif('📅 Rappel',e.titre+' — demain à '+new Date(e.date_debut).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),'statut_change',null));
   }
 
-  // Annonces
-  const {data:annsRaw}=await sb.from('annonces').select('*').order('epingle',{ascending:false}).order('created_at',{ascending:false}).limit(12);
-  const anns=(annsRaw||[]).filter(a=>annonceReaderCanSee(a)).slice(0,3);
+  // Annonces (🔥 FIX ARCHIVES)
+  // On limite à 20 au lieu de 12 pour être sûr d'en avoir 3 même si plusieurs sont archivées
+  const {data:annsRaw}=await sb.from('annonces').select('*').order('epingle',{ascending:false}).order('created_at',{ascending:false}).limit(20);
+  
+  const anns=(annsRaw||[])
+    .filter(a => typeof annonceReaderCanSee === 'function' ? annonceReaderCanSee(a) : true)
+    // 🔥 Le filtre Magique : on exclut celles qui ont le statut 'archive'
+    .filter(a => {
+       const st = (a.statut || a.etat || '').toLowerCase();
+       return st !== 'archive' && st !== 'archivé';
+    })
+    .slice(0,3);
+
   const annEl=$('dash-annonces-list');
   if(annEl){
     if(!anns.length){
@@ -841,6 +851,7 @@ async function loadDashboardWidgets() {
       ).join('');
     }
   }
+  
   renderDashChart();
 }
 
