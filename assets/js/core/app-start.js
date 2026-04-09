@@ -10,6 +10,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
     $('login-screen').style.display = 'flex';
     $('app').style.display = 'none';
     user = null; profile = null;
+    window._currentCoproId = null; // Nettoyage
     return;
   }
   $('auth-btn').disabled = false;
@@ -77,8 +78,6 @@ async function startApp() {
     $('app').style.display = 'flex';
 
     // ── Chargement des permissions AVANT initUI ──
-    // C'est l'ordre critique : Permissions doit être prêt avant
-    // qu'on calcule quels items de menu afficher.
     await Permissions.load();
 
     initUI();
@@ -102,8 +101,9 @@ async function startApp() {
         { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
         async (payload) => {
           if (payload.new && payload.new.actif === false) {
+            // Déconnexion propre sans forcer un reload brutal qui casse l'UX
             await sb.auth.signOut();
-            location.reload();
+            window.location.href = '/'; 
           }
         }
       )
@@ -127,6 +127,10 @@ async function loadProfile() {
     const { data } = await Promise.race([query, timeout]);
     if (data) {
       profile = data;
+      // 🔥 FIX CRITIQUE : Lier la variable globale au profil pour le Registre
+      if (profile.copro_id) {
+        window._currentCoproId = profile.copro_id;
+      }
     } else {
       const meta = user.user_metadata || {};
       profile = { id: user.id, email: user.email, nom: meta.nom || null, prenom: meta.prenom || null, role: meta.role || 'copropriétaire', tour: meta.tour || null, lot: meta.lot || null };
@@ -134,7 +138,14 @@ async function loadProfile() {
     dbg('[loadProfile] role =', profile.role);
   } catch (e) {
     err('[loadProfile] CRASH/TIMEOUT:', e.message);
-    try { const { data } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle(); if (data) { profile = data; return; } } catch {}
+    try { 
+      const { data } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle(); 
+      if (data) { 
+        profile = data; 
+        if (profile.copro_id) window._currentCoproId = profile.copro_id; // Ajout sécurité ici aussi
+        return; 
+      } 
+    } catch {}
     const meta = user.user_metadata || {};
     profile = { id: user.id, email: user.email, nom: meta.nom || null, prenom: meta.prenom || null, role: meta.role || 'copropriétaire' };
   }
