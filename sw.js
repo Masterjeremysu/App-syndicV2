@@ -1,5 +1,5 @@
-// CoproSync Service Worker v5 PRO — Cache SPA & Push Notifications
-const CACHE_NAME = 'coprosync-v5'; // <-- BUMP VERSION POUR PURGER L'ANCIEN CACHE
+// CoproSync Service Worker v6 PRO — Cache SPA & Push Notifications
+const CACHE_NAME = 'coprosync-v6'; // <-- V6 pour forcer la purge de l'ancien code buggé
 const CORE_ASSETS = [
   '/',
   '/index.html',
@@ -10,7 +10,6 @@ const CORE_ASSETS = [
 ];
 
 self.addEventListener('install', e => {
-  // Force l'installation immédiate du nouveau SW
   self.skipWaiting();
   e.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(CORE_ASSETS))
@@ -18,7 +17,6 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
-  // Nettoie TOUS les anciens caches (ex: v4)
   e.waitUntil(
     caches.keys().then(keys => Promise.all(
       keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
@@ -31,45 +29,44 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // 1. Ignorer Supabase (Ne jamais mettre en cache les requêtes BDD)
+  // 1. Ignorer Supabase et les extensions
   if (url.hostname.includes('supabase.co')) return;
-  // Ignorer les requêtes d'extension Chrome
   if (url.protocol === 'chrome-extension:') return;
 
-  // 2. Navigation SPA (index.html) -> NETWORK FIRST (Toujours avoir la dernière version de l'app)
+  // 2. Navigation SPA (Network First)
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request).then(networkResponse => {
-        return caches.open(CACHE_NAME).then(cache => {
-          cache.put(e.request, networkResponse.clone());
-          return networkResponse;
+        // 🔥 On clone IMMÉDIATEMENT la réponse
+        const responseToCache = networkResponse.clone();
+        caches.open(CACHE_NAME).then(cache => {
+          cache.put(e.request, responseToCache);
         });
+        return networkResponse;
       }).catch(() => {
-        // Si hors-ligne, on fallback sur le cache
         return caches.match('/index.html');
       })
     );
     return;
   }
 
-  // 3. Assets (JS, CSS, Images) -> VRAI Stale-While-Revalidate
+  // 3. Assets (JS, CSS, Images) -> Stale-While-Revalidate
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(cachedResponse => {
-      // On lance la requête réseau en tâche de fond pour mettre à jour le cache
       const fetchPromise = fetch(e.request).then(networkResponse => {
         if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          // 🔥 FIX CRITIQUE : Cloner la réponse de façon synchrone AVANT l'ouverture asynchrone du cache
+          const responseToCache = networkResponse.clone();
+          
           caches.open(CACHE_NAME).then(cache => {
-            cache.put(e.request, networkResponse.clone());
+            cache.put(e.request, responseToCache);
           });
         }
-        return networkResponse;
+        return networkResponse; // On retourne l'original au navigateur
       }).catch(error => {
         console.warn('[SW] Fetch failed:', error);
       });
 
-      // On retourne le cache DIRECTEMENT s'il existe (hyper rapide)
-      // ET la requête en fond (fetchPromise) va mettre à jour le cache pour le coup d'après !
-      // S'il n'y a pas de cache, on attend le fetch (premier chargement).
       return cachedResponse || fetchPromise;
     })
   );
@@ -107,19 +104,16 @@ self.addEventListener('notificationclick', e => {
   
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
-      // Cherche si l'application est déjà ouverte dans un onglet
       for (let i = 0; i < windowClients.length; i++) {
         const client = windowClients[i];
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           client.focus();
           if (ticketId) {
-            // Envoi un message au frontend pour qu'il ouvre la modale du ticket
             client.postMessage({ type: 'OPEN_TICKET', ticketId });
           }
           return;
         }
       }
-      // Si aucun onglet ouvert, on ouvre une nouvelle fenêtre
       if (clients.openWindow) {
         return clients.openWindow(url);
       }
