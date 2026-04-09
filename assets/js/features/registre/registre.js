@@ -945,57 +945,45 @@ function _modal(title,bodyHtml,btnText,onConfirm,opts={}) {
 }
 
 // ── PAGE SCAN PUBLIQUE ────────────────────────────────────────────────────────
-async function enregistrerPassage(zoneToken) {
-  try {
-    console.log("Recherche du prestataire pour la zone :", zoneToken);
+// ── PAGE SCAN PUBLIQUE ────────────────────────────────────────────────────────
 
-    // 1. Demander à Supabase à qui appartient cette zone
-    const { data: zoneData, error: zoneError } = await sb
-      .from('zones') // Remplace par le vrai nom de ta table de zones si différent
-      .select('prestataire_id')
-      .eq('id', zoneToken) // Remplace 'id' par le nom de ta colonne qui contient le token
-      .single();
-
-    if (zoneError || !zoneData?.prestataire_id) {
-      alert("Erreur : Cette zone n'a pas de prestataire assigné !");
-      return;
-    }
-
-    console.log("Prestataire trouvé :", zoneData.prestataire_id);
-
-    // 2. Enregistrer le passage avec le BON prestataire
-    const { error: insertError } = await sb
-      .from('passages')
-      .insert({
-        zone_id: zoneToken,
-        prestataire_id: zoneData.prestataire_id, // L'assignation automatique !
-        date_passage: new Date().toISOString()
-        // Ajoute ici tes autres colonnes (ex: type_action, etc.)
-      });
-
-    if (insertError) throw insertError;
-
-    // 3. Succès visuel pour l'utilisateur
-    alert("✅ Passage enregistré avec succès !");
-    // Optionnel : rediriger ou fermer l'application
-    
-  } catch (error) {
-    console.error("Erreur d'enregistrement :", error);
-    alert("Erreur lors de l'enregistrement. Veuillez réessayer.");
+async function renderScanPage(token) {
+  const page=document.getElementById('page'); if(!page)return;
+  page.innerHTML=`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f9fafb">${_ico('spin',32)}</div>`;
+  let zone=null;
+  try{zone=await dbGetZoneByToken(token);}catch(e){}
+  if(!zone){
+    page.innerHTML=`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui;background:#f9fafb"><div style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:16px">⚠️</div><div style="font-size:22px;font-weight:800;margin-bottom:8px;color:#111">QR Code invalide</div><div style="font-size:15px;color:#6b7280">Ce code ne correspond à aucune zone.</div></div></div>`;return;
   }
+  const existing=(zone.passages||[]).find(p=>p.status==='en_cours');
+  const type=existing?'depart':'arrivee';
+  const color=type==='arrivee'?'#22C55E':'#EF4444';
+  const label=type==='arrivee'?'Enregistrer mon arrivée':'Enregistrer mon départ';
+  page.innerHTML=`<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f9fafb;font-family:-apple-system,sans-serif;padding:24px">
+    <div style="background:white;border-radius:24px;padding:36px 28px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.1);text-align:center">
+      <div style="width:64px;height:64px;border-radius:18px;background:${color}20;border:2px solid ${color}30;margin:0 auto 20px;display:flex;align-items:center;justify-content:center">${_ico(zone.icone||'qr',28).replace(/currentColor/g,color)}</div>
+      <div style="font-size:13px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">CoproSync · Pointage</div>
+      <div style="font-size:22px;font-weight:900;color:#111827;margin-bottom:4px">${_esc(zone.nom)}</div>
+      <div style="font-size:14px;color:#6b7280;margin-bottom:28px">${type==='arrivee'?'Aucun passage en cours.':existing?`Passage en cours · arrivée à ${_regFmt(existing.arrivee)}`:''}</div>
+      <div style="margin-bottom:20px;text-align:left">
+        <label style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;display:block;margin-bottom:8px">Votre nom</label>
+        <input id="scan-nom" style="width:100%;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;padding:12px 16px;font-size:16px;font-weight:600;color:#111;outline:none;box-sizing:border-box" placeholder="Prénom NOM">
+      </div>
+      <button id="scan-btn" onclick="_handleScan('${zone.id}','${type}','${zone.copro_id||''}')" style="width:100%;padding:16px;background:${color};color:white;border:none;border-radius:14px;font-size:17px;font-weight:900;cursor:pointer;box-shadow:0 8px 24px ${color}44">${label}</button>
+      <div style="margin-top:16px;font-size:11px;color:#d1d5db">Aucun compte requis · Données sécurisées</div>
+    </div>
+  </div>`;
 }
-async function _handleScan(zoneId, type, coproId) {
-  // 1. On récupère le nom que le gars a tapé dans ton interface
-  const nomIntervenant = document.getElementById('scan-nom').value;
 
-  // Optionnel : Mettre le bouton en mode chargement
+async function _handleScan(zoneId, type, coproId) {
+  const nomIntervenant = document.getElementById('scan-nom').value;
   const btn = document.getElementById('scan-btn');
   const oldText = btn.innerText;
   btn.innerText = "Enregistrement...";
   btn.disabled = true;
 
   try {
-    // 2. 🎯 LA MAGIE : On demande à Supabase à quelle entreprise appartient cette zone
+    // 1. Recherche du prestataire assigné à la zone
     const { data: zoneData, error: zoneError } = await sb
       .from('zones') 
       .select('prestataire_id')
@@ -1009,29 +997,27 @@ async function _handleScan(zoneId, type, coproId) {
       return;
     }
 
-    // 3. On enregistre le passage avec le bon prestataire
+    // 2. Création du passage avec l'ID du prestataire trouvé !
     const { error: insertError } = await sb
       .from('passages')
       .insert({
         zone_id: zoneId,
         copro_id: coproId,
-        prestataire_id: zoneData.prestataire_id, // L'ID trouvé automatiquement !
-        nom_intervenant: nomIntervenant, // Le prénom tapé (ex: "Jean")
-        type_passage: type, // 'arrivee' ou 'depart'
-        date_passage: new Date().toISOString()
+        prestataire_id: zoneData.prestataire_id, 
+        nom_intervenant: nomIntervenant, 
+        arrivee: new Date().toISOString(), // L'heure actuelle
+        status: 'en_cours'
       });
 
     if (insertError) throw insertError;
 
-    // 4. Succès !
+    // 3. Succès
     alert("✅ Passage enregistré avec succès !");
-    
-    // On recharge la page pour mettre à jour l'affichage (passer de Arrivée à Départ)
     window.location.reload();
 
   } catch (error) {
     console.error(error);
-    alert("Erreur lors de la sauvegarde.");
+    alert("Erreur lors de la sauvegarde : " + error.message);
     btn.innerText = oldText;
     btn.disabled = false;
   }
