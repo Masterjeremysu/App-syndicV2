@@ -948,43 +948,42 @@ function _modal(title,bodyHtml,btnText,onConfirm,opts={}) {
 async function renderScanPage(token) {
   const page = document.getElementById('page'); if (!page) return;
   
-  // 🔒 SÉCURITÉ : On tue les menus de l'app pour le prestataire
+  // Verrouillage des menus pour le prestataire
   const styleLock = document.createElement('style');
-  styleLock.innerHTML = `
-    #bottom-nav, #sidebar, #topbar, .main-nav { display: none !important; }
-    body { padding-bottom: 0 !important; background: #f9fafb !important; }
-    #page { margin: 0 !important; width: 100vw !important; height: 100vh !important; }
-  `;
+  styleLock.innerHTML = `#bottom-nav, #sidebar, #topbar, .main-nav { display: none !important; } body { padding: 0 !important; background: #f9fafb !important; }`;
   document.head.appendChild(styleLock);
 
   page.innerHTML = `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;">${_ico('spin', 32)}</div>`;
 
   try {
-    // 1. On récupère la zone ET le nom du prestataire lié (jointure simple)
+    // 🎯 LA CORRECTION : On demande explicitement les passages avec le status 'en_cours'
     const { data: zone, error } = await sb
       .from('zones')
       .select(`
         *,
-        prestataires ( nom, couleur )
+        prestataires ( nom, couleur ),
+        passages ( id, status, arrivee )
       `)
       .eq('qr_token', token)
+      .eq('passages.status', 'en_cours') // On ne veut savoir que s'il y en a un ouvert
       .single();
 
-    if (error || !zone) throw new Error("Zone introuvable");
+    if (error || !zone) throw new Error("Zone introuvable ou QR code invalide");
 
-    const prestataire = zone.prestataires || { nom: 'Prestataire Externe', couleur: '#6b7280' };
-    const existing = (zone.passages || []).find(p => p.status === 'en_cours');
+    const prestataire = zone.prestataires || { nom: 'Prestataire', couleur: '#6b7280' };
+    
+    // On vérifie s'il y a vraiment une mission ouverte
+    const existing = (zone.passages && zone.passages.length > 0) ? zone.passages[0] : null;
+    
     const type = existing ? 'depart' : 'arrivee';
     const color = type === 'arrivee' ? '#22C55E' : '#EF4444';
     const label = type === 'arrivee' ? 'Enregistrer mon arrivée' : 'Enregistrer mon départ';
 
-    // 2. L'Interface Stylisée "Mission"
     page.innerHTML = `
-      <div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; font-family:-apple-system, sans-serif;">
-        <div style="background:white; border-radius:28px; padding:40px 30px; max-width:400px; width:100%; box-shadow:0 25px 50px -12px rgba(0,0,0,0.1); text-align:center; border:1px solid #f1f5f9;">
+      <div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; font-family:sans-serif;">
+        <div style="background:white; border-radius:28px; padding:40px 30px; max-width:400px; width:100%; box-shadow:0 20px 50px rgba(0,0,0,0.05); text-align:center;">
           
-          <div style="display:inline-flex; align-items:center; gap:8px; background:${prestataire.couleur}10; color:${prestataire.couleur}; padding:6px 14px; border-radius:100px; font-size:12px; font-weight:800; margin-bottom:20px; border:1px solid ${prestataire.couleur}20;">
-            <span style="width:8px; height:8px; background:${prestataire.couleur}; border-radius:50%;"></span>
+          <div style="display:inline-flex; align-items:center; gap:8px; background:${prestataire.couleur}10; color:${prestataire.couleur}; padding:6px 14px; border-radius:100px; font-size:12px; font-weight:800; margin-bottom:20px;">
             ${prestataire.nom.toUpperCase()}
           </div>
 
@@ -992,37 +991,29 @@ async function renderScanPage(token) {
             ${_ico(zone.icone || 'qr', 32)}
           </div>
 
-          <h1 style="font-size:24px; font-weight:900; color:#1e293b; margin:0 0 8px;">${_esc(zone.nom)}</h1>
-          <p style="font-size:15px; color:#64748b; margin-bottom:32px;">
-            ${type === 'arrivee' ? 'Scannez pour débuter votre mission.' : `En cours depuis ${_regSince(existing.arrivee)}`}
+          <h1 style="font-size:24px; font-weight:900; color:#1e293b; margin:0;">${_esc(zone.nom)}</h1>
+          <p style="font-size:15px; color:#64748b; margin:10px 0 30px;">
+            ${type === 'arrivee' ? 'Prêt pour votre mission ?' : `📍 En cours · arrivée à ${_regFmt(existing.arrivee)}`}
           </p>
 
-          <div style="margin-bottom:24px; text-align:left;">
-            <label style="font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.1em; margin-left:4px; margin-bottom:8px; display:block;">Votre Prénom</label>
-            <input id="scan-nom" type="text" focus 
-              style="width:100%; background:#f8fafc; border:2px solid #e2e8f0; border-radius:16px; padding:16px; font-size:16px; font-weight:600; outline:none; transition:border-color 0.2s;" 
-              placeholder="Ex: Suzet"
-              onfocus="this.style.borderColor='${color}'">
-          </div>
+          ${type === 'arrivee' ? `
+            <div style="margin-bottom:24px; text-align:left;">
+              <label style="font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; margin-bottom:8px; display:block;">Votre Prénom</label>
+              <input id="scan-nom" type="text" style="width:100%; background:#f8fafc; border:2px solid #e2e8f0; border-radius:16px; padding:16px; font-size:16px; font-weight:600; outline:none; box-sizing:border-box;" placeholder="Ex: Suzet">
+            </div>
+          ` : `<input id="scan-nom" type="hidden" value="Suzet">`}
 
           <button id="scan-btn" onclick="_handleScan('${zone.id}', '${type}', '${zone.copro_id}')"
-            style="width:100%; padding:20px; background:${color}; color:white; border:none; border-radius:18px; font-size:17px; font-weight:800; cursor:pointer; box-shadow:0 10px 20px -5px ${color}60; transition:transform 0.1s;"
-            onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1)'">
+            style="width:100%; padding:20px; background:${color}; color:white; border:none; border-radius:18px; font-size:17px; font-weight:800; cursor:pointer; box-shadow:0 10px 20px ${color}30;">
             ${label}
           </button>
 
-          <p style="margin-top:24px; font-size:12px; color:#cbd5e1; font-weight:500;">
-            Sécurisé par CoproSync · Mode Prestataire
-          </p>
+          <p style="margin-top:24px; font-size:12px; color:#cbd5e1;">CoproSync · Mode Pointage</p>
         </div>
       </div>
     `;
   } catch (e) {
-    page.innerHTML = `<div style="padding:40px; text-align:center; font-family:sans-serif;">
-      <div style="font-size:50px;">⚠️</div>
-      <h2 style="margin:20px 0 10px;">Accès non autorisé</h2>
-      <p style="color:#64748b;">${e.message}</p>
-    </div>`;
+    page.innerHTML = `<div style="padding:40px; text-align:center;"><h2>Erreur</h2><p>${e.message}</p></div>`;
   }
 }
 async function _handleScan(zoneId, type, coproId) {
