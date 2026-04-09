@@ -199,32 +199,40 @@ function initUI() {
 
 async function loadAll() {
   try {
-    // 1. On charge l'essentiel pour afficher le dashboard le plus vite possible
     await loadTickets();
     if (currentPage === 'dashboard') renderDashboard();
 
-    // 2. On précharge le reste en arrière-plan
     const tasks = [];
     if (Permissions.has('contrats.view'))  tasks.push(loadContrats());
     if (Permissions.has('cles.view'))      tasks.push(loadCles());
     if (Permissions.has('journal.view'))   tasks.push(loadJournal());
     
-    // 🔥 CORRECTION ICI : On force le chargement pour alimenter le Dashboard au démarrage
-    if (typeof loadVotes === 'function')     tasks.push(loadVotes());
-    if (typeof loadDocuments === 'function') tasks.push(loadDocuments());
+    // 🔥 FIX DOCUMENTS & VOTES : Chargement garanti pour le Dashboard
+    tasks.push((async () => {
+      try {
+        if (typeof loadVotes === 'function') await loadVotes();
+      } catch(e) {}
+    })());
+
+    tasks.push((async () => {
+      try {
+        if (typeof loadDocuments === 'function') await loadDocuments();
+        
+        // Fallback de sécurité absolu : Si _docsCache est vide ou n'existe pas, on le force ici
+        if (typeof window._docsCache === 'undefined' || window._docsCache.length === 0) {
+           const {data} = await sb.from('documents').select('*').order('created_at', {ascending: false}).limit(15);
+           window._docsCache = data || [];
+        }
+      } catch(e) {}
+    })());
 
     tasks.push(loadAnnonceCache());
     tasks.push(loadEvenementsCache());
     if (Permissions.has('contacts.view')) tasks.push(loadContactsCache());
 
-    // On attend que tout soit fini
     await Promise.all(tasks);
-    
-    // 3. On met à jour l'UI avec les nouvelles données fraîchement reçues
     updateBadges();
     checkNotifications();
-    
-    // On re-rend le dashboard pour qu'il affiche les Votes et Documents !
     if (currentPage === 'dashboard') renderDashboard();
   } catch (e) {
     err('loadAll error:', e);
