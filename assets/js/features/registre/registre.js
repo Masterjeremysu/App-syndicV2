@@ -136,6 +136,14 @@ let _missionCounter = 10;
     .qr-url{font-family:monospace;font-size:11px;background:var(--bg-2);padding:8px 14px;border-radius:8px;border:1px solid var(--border);color:var(--text-2);word-break:break-all;text-align:center}
     .qr-zone-name{font-size:16px;font-weight:800;color:var(--text-1);text-align:center}
     .qr-instructions{font-size:13px;color:var(--text-3);text-align:center;font-weight:500;line-height:1.6}
+    .presta-contact-badges { display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap }
+    .presta-c-badge { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; background:var(--bg-2); border:1px solid var(--border); font-size:11px; font-weight:700; color:var(--text-2); text-decoration:none; transition:all .15s }
+    .presta-c-badge:hover { background:var(--surface-2); color:var(--text-1); border-color:var(--border-strong) }
+    .presta-missions-scroll { max-height:260px; overflow-y:auto; padding-right:6px; display:flex; flex-direction:column; gap:8px; margin-bottom:16px }
+    .presta-missions-scroll::-webkit-scrollbar { width:4px }
+    .presta-missions-scroll::-webkit-scrollbar-track { background:transparent }
+    .presta-missions-scroll::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:4px }
+    .presta-missions-scroll::-webkit-scrollbar-thumb:hover { background:var(--text-3) }
     @media(max-width:1100px){.reg-stats{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:768px){
       .reg-wrap{padding:18px 16px}
@@ -473,7 +481,6 @@ function openValidationManuelle(id) {
 }
 
 // ── PRESTATAIRES ──────────────────────────────────────────────────────────────
-// ── PRESTATAIRES ──────────────────────────────────────────────────────────────
 function _renderPrestataires() {
   const el=document.getElementById('reg-tab-prestataires'); if(!el)return;
   const addBtn=`<div style="display:flex;justify-content:flex-end;margin-bottom:18px"><button class="reg-btn reg-btn-primary" onclick="openEditPresta(null)">${_ico('plus')} Ajouter un prestataire</button></div>`;
@@ -483,57 +490,63 @@ function _renderPrestataires() {
   }
   
   el.innerHTML=addBtn+`<div class="reg-prestas-grid">${_regPrestas.map(p=>`
-    <div class="presta-card">
-      <div class="presta-card-top">
-        <div class="presta-card-header">
+    <div class="presta-card" style="display:flex;flex-direction:column;max-height:580px;">
+      <div class="presta-card-top" style="flex:1;display:flex;flex-direction:column;overflow:hidden;padding-bottom:0;">
+        <div class="presta-card-header" style="margin-bottom:14px">
           <div class="presta-ava" style="background:${_esc(p.couleur)};box-shadow:0 6px 16px ${_esc(p.couleur)}44">${_esc(p.nom).substring(0,2).toUpperCase()}</div>
           <div style="flex:1;min-width:0">
             <div class="presta-nom">${_esc(p.nom)}</div>
-            <div class="presta-contrat" style="color:var(--text-3);font-size:12px;font-weight:600">${p.siret ? 'SIRET: '+_esc(p.siret) : (p.missions?.length ? p.missions.length + ' mission(s)' : 'Prestataire')}</div>
+            <div class="presta-contrat" style="color:var(--text-3);font-size:11.5px;font-weight:600">
+              ${p.siret ? 'SIRET: '+_esc(p.siret) : 'Prestataire'} ${p.contrat_debut ? ` · Contrat: ${p.contrat_debut}` : ''}
+            </div>
           </div>
           <button class="reg-btn-icon" onclick="openEditPresta('${p.id}')">${_ico('edit',15)}</button>
         </div>
+
+        ${(p.telephone || p.email) ? `
+        <div class="presta-contact-badges">
+          ${p.telephone ? `<a href="tel:${_esc(p.telephone).replace(/\s/g,'')}" class="presta-c-badge">${_ico('phone',12)} ${_esc(p.telephone)}</a>` : ''}
+          ${p.email ? `<a href="mailto:${_esc(p.email)}" class="presta-c-badge">${_ico('mail',12)} Email</a>` : ''}
+        </div>` : ''}
+
+        <div style="font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);margin-bottom:8px;">
+          Missions (${p.missions?.length || 0})
+        </div>
         
-        <div class="presta-missions" style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px">
+        <div class="presta-missions-scroll" style="flex:1;">
           ${(p.missions||[]).map(m=>{
             
-            // Génération des petites pilules pour les zones
+            // Génération des mini-pilules pour les zones
             const znArray = (m.zones||[]).map(zid => {
                const zObj = _regZoneLoc(zid);
-               return zObj ? `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-2);padding:3px 7px;border-radius:6px;font-size:10.5px;font-weight:600;color:var(--text-2);border:1px solid var(--border)">${_ico(zObj.icone, 11)} ${_esc(zObj.nom)}</span>` : '';
+               return zObj ? `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg-2);padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;color:var(--text-2);border:1px solid var(--border)">${_ico(zObj.icone, 10)} ${_esc(zObj.nom)}</span>` : '';
             }).filter(Boolean);
             
             const znHtml = znArray.length 
-                ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px">${znArray.join('')}</div>` 
-                : '<div style="font-size:11px;color:var(--text-3);margin-top:4px;margin-bottom:4px">Aucune zone assignée</div>';
+                ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;margin-bottom:4px">${znArray.join('')}</div>` 
+                : '<div style="font-size:10px;color:var(--text-3);margin-top:4px;margin-bottom:4px">Aucune zone assignée</div>';
 
             return `
-            <div style="padding:12px 14px;background:var(--bg-1);border-radius:12px;border:1px solid var(--border);display:flex;flex-direction:column;gap:2px">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start">
-                <div style="font-size:13px;font-weight:800;color:var(--text-1)">${_esc(m.label)}</div>
-                <span style="font-size:10.5px;font-weight:800;color:var(--primary);background:rgba(var(--primary-rgb),.1);padding:3px 8px;border-radius:6px;white-space:nowrap">${_esc(m.frequence)}</span>
+            <div style="padding:10px 12px;background:var(--bg-1);border-radius:10px;border:1px solid var(--border);display:flex;flex-direction:column;gap:2px;flex-shrink:0;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+                <div style="font-size:12px;font-weight:800;color:var(--text-1);line-height:1.3">${_esc(m.label)}</div>
+                <span style="font-size:10px;font-weight:800;color:var(--primary);background:rgba(var(--primary-rgb),.1);padding:2px 6px;border-radius:4px;white-space:nowrap;flex-shrink:0;">${_esc(m.frequence)}</span>
               </div>
               ${znHtml}
-              <div style="font-size:11.5px;font-weight:600;color:var(--text-3);display:flex;align-items:center;gap:5px;margin-top:2px">
-                ${_ico('clock', 12)} ${m.horaire_debut||'?'} – ${m.horaire_fin||'?'}
+              <div style="font-size:11px;font-weight:600;color:var(--text-3);display:flex;align-items:center;gap:4px;margin-top:2px">
+                ${_ico('clock', 11)} ${m.horaire_debut||'?'} – ${m.horaire_fin||'?'}
               </div>
             </div>`;
-          }).join('')||'<div style="font-size:13px;color:var(--text-3);padding:8px;text-align:center;background:var(--bg-1);border-radius:10px;border:1px dashed var(--border)">Aucune mission enregistrée</div>'}
+          }).join('')||'<div style="font-size:12px;color:var(--text-3);padding:12px;text-align:center;background:var(--bg-1);border-radius:10px;border:1px dashed var(--border)">Aucune mission enregistrée</div>'}
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:16px">
-          ${p.telephone?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--text-2)">${_ico('phone',13)}<a href="tel:${_esc(p.telephone).replace(/\s/g,'')}" style="color:inherit;text-decoration:none">${_esc(p.telephone)}</a></div>`:''}
-          ${p.email?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--text-2)">${_ico('mail',13)}<a href="mailto:${_esc(p.email)}" style="color:var(--primary);text-decoration:none">${_esc(p.email)}</a></div>`:''}
-        </div>
-        ${p.contrat_debut?`<div style="font-size:11px;color:var(--text-3);font-weight:600;margin-bottom:16px">Contrat : ${p.contrat_debut} → ${p.contrat_fin||'…'}</div>`:''}
       </div>
-      <div class="presta-card-footer">
+      <div class="presta-card-footer" style="margin-top:0;">
         <button class="reg-btn reg-btn-secondary reg-btn-sm" style="flex:1" onclick="openHistoriquePresta('${p.id}')">${_ico('doc',13)} Historique</button>
         <button class="reg-btn reg-btn-sm" style="flex:1;background:${_esc(p.couleur)};color:white;border-color:${_esc(p.couleur)}" onclick="openPointageManuel('${p.id}')">${_ico('clock',13)} Badger</button>
       </div>
     </div>`).join('')}</div>`;
 }
-
 function openEditPresta(id) {
   const p=id?_regPrestas.find(x=>x.id===id):null,isNew=!p;
   const body=`<div>
