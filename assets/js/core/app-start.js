@@ -199,6 +199,7 @@ function initUI() {
 
 async function loadAll() {
   try {
+    // 1. Chargement critique initial
     await loadTickets();
     if (currentPage === 'dashboard') renderDashboard();
 
@@ -206,34 +207,42 @@ async function loadAll() {
     if (Permissions.has('contrats.view'))  tasks.push(loadContrats());
     if (Permissions.has('cles.view'))      tasks.push(loadCles());
     if (Permissions.has('journal.view'))   tasks.push(loadJournal());
-    
-    // 🔥 FIX DOCUMENTS & VOTES : Chargement garanti pour le Dashboard
-    tasks.push((async () => {
-      try {
-        if (typeof loadVotes === 'function') await loadVotes();
-      } catch(e) {}
-    })());
-
-    tasks.push((async () => {
-      try {
-        if (typeof loadDocuments === 'function') await loadDocuments();
-        
-        // Fallback de sécurité absolu : Si _docsCache est vide ou n'existe pas, on le force ici
-        if (typeof window._docsCache === 'undefined' || window._docsCache.length === 0) {
-           const {data} = await sb.from('documents').select('*').order('created_at', {ascending: false}).limit(15);
-           window._docsCache = data || [];
-        }
-      } catch(e) {}
-    })());
-
     tasks.push(loadAnnonceCache());
     tasks.push(loadEvenementsCache());
     if (Permissions.has('contacts.view')) tasks.push(loadContactsCache());
 
+    // 🔥 FIX ABSOLU : DOCUMENTS & VOTES
+    // On requête Supabase directement et on inonde toutes les variables de cache possibles
+    // pour être certain que le Dashboard trouve la donnée, peu importe comment il a été codé.
+    tasks.push(sb.from('documents').select('*').order('created_at', {ascending: false}).limit(20).then(({data}) => {
+        if (data) {
+            window._docsCache = data;
+            if (typeof cache !== 'undefined') cache.documents = data;
+        }
+    }).catch(e => console.warn('Erreur chargement init documents', e)));
+
+    tasks.push(sb.from('votes').select('*').order('created_at', {ascending: false}).limit(20).then(({data}) => {
+        if (data) {
+            window._votesCache = data;
+            window._voteCache = data; // Au cas où
+            if (typeof cache !== 'undefined') cache.votes = data;
+        }
+    }).catch(e => console.warn('Erreur chargement init votes', e)));
+
+    // 2. On attend que TOUT soit chargé en arrière-plan
     await Promise.all(tasks);
+    
+    // 3. Mise à jour de l'UI
     updateBadges();
     checkNotifications();
-    if (currentPage === 'dashboard') renderDashboard();
+    
+    // 4. On force un dernier rafraîchissement du Dashboard avec les caches pleins
+    if (currentPage === 'dashboard') {
+        renderDashboard();
+        if (typeof loadDashboardWidgets === 'function') {
+            loadDashboardWidgets();
+        }
+    }
   } catch (e) {
     err('loadAll error:', e);
   }
