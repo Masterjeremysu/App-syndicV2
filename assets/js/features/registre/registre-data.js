@@ -1,3 +1,11 @@
+// ════════════════════════════════════════════════════════════════════════════
+//  REGISTRE — COUCHE DATA SUPABASE
+//  assets/js/features/registre/registre-data.js
+//
+//  Importe ce fichier AVANT registre.js
+//  `sb` = ton client Supabase déjà initialisé (createClient)
+// ════════════════════════════════════════════════════════════════════════════
+ 
 // ── ZONES ────────────────────────────────────────────────────────────────────
  
 async function dbGetZones(copro_id) {
@@ -265,4 +273,3 @@ function subscribePassages(copro_id, onUpdate) {
 function unsubscribePassages(channel) {
   if (channel) sb.removeChannel(channel);
 }
- 
