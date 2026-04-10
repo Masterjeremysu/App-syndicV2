@@ -126,32 +126,34 @@ function initPullToRefresh() {
     const dy = e.touches[0].clientY - startY;
     const dx = Math.abs(e.touches[0].clientX - startX);
 
-    // Annule si l'utilisateur glisse horizontalement (pour ne pas bloquer les carrousels)
     if (dx > 30 && dy < 40) { pulling = false; return; }
-    // Doit être un geste vers le bas
     if (dy < 10) return;
+
+    // --- LE CORRECTIF MAGIQUE EST ICI ---
+    // On annule le rafraîchissement natif du navigateur de force !
+    if (e.cancelable) {
+        e.preventDefault(); 
+    }
+    // ------------------------------------
 
     ind.style.opacity = '1';
 
-    // Résistance visuelle : l'icône descend moins vite que le doigt (Effet élastique)
     const pullDistance = Math.min(dy * 0.4, 70); 
     ind.style.transform = `translate(-50%, ${pullDistance}px) scale(1)`;
     ind.style.transition = 'none';
 
-    // Rotation progressive de la flèche en tirant
     ptrIcon.style.transform = `rotate(${dy * 1.2}deg)`;
     ptrIcon.style.transition = 'none';
 
-    // Vérification de la VRAIE INTENTION
     if (dy > INTENT_THRESHOLD && !activated) {
       activated = true;
-      ptrIcon.style.color = 'var(--accent, #2563eb)'; // Devient bleu vif
-      if (navigator.vibrate) navigator.vibrate(20); // Petit "clic" haptique
+      ptrIcon.style.color = 'var(--accent, #2563eb)';
+      if (navigator.vibrate) navigator.vibrate(20);
     } else if (dy <= INTENT_THRESHOLD && activated) {
       activated = false;
-      ptrIcon.style.color = 'var(--text-3, #9ca3af)'; // Redevient neutre si on remonte
+      ptrIcon.style.color = 'var(--text-3, #9ca3af)';
     }
-  }, { passive: true });
+  }, { passive: false }); // ATTENTION: Il faut remplacer passive: true par passive: false ici !
 
   page.addEventListener('touchend', e => {
     if (!pulling) return;
