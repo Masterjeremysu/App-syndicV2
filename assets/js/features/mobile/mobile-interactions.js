@@ -78,35 +78,41 @@ function initSwipeToClose() {
 }
 
 // ── PULL TO REFRESH — Avec physique native et retour haptique ──
+// ── PULL TO REFRESH — Avec "Vraie Intention" (Longue distance) ──
 function initPullToRefresh() {
   let startY = 0;
   let startX = 0;
   let pulling = false;
   let activated = false;
 
-  const page = $('page');
+  const page = document.getElementById('page') || document.body;
   if (!page) return;
 
-  // Création unique de l'indicateur SVG pour éviter les manipulations DOM lourdes
-  let ind = document.createElement('div');
-  ind.id = 'ptr-indicator';
-  ind.style.cssText = `
-    position: fixed; top: 60px; left: 50%;
-    transform: translate(-50%, -60px) scale(0.8);
-    background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb);
-    border-radius: 50%; width: 40px; height: 40px;
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1); pointer-events: none;
-    z-index: 500; opacity: 0; transition: opacity 0.2s; color: var(--primary, #3b82f6);
-  `;
-  // Icône flèche ronde SVG
-  ind.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="ptr-icon"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.1-5.9L2 9"/></svg>`;
-  document.body.appendChild(ind);
+  // Création unique de l'indicateur SVG (Bulles de chargement)
+  let ind = document.getElementById('ptr-indicator');
+  if (!ind) {
+    ind = document.createElement('div');
+    ind.id = 'ptr-indicator';
+    ind.style.cssText = `
+      position: fixed; top: 60px; left: 50%;
+      transform: translate(-50%, -60px) scale(0.8);
+      background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb);
+      border-radius: 50%; width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1); pointer-events: none;
+      z-index: 500; opacity: 0; transition: opacity 0.2s; color: var(--text-3, #9ca3af);
+    `;
+    ind.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="ptr-icon"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.1-5.9L2 9"/></svg>`;
+    document.body.appendChild(ind);
+  }
   const ptrIcon = document.getElementById('ptr-icon');
 
+  // LA RÈGLE D'OR : Distance physique requise pour valider l'intention (160px)
+  const INTENT_THRESHOLD = 160;
+
   page.addEventListener('touchstart', e => {
-    // Déclenche UNIQUEMENT si on est vraiment tout en haut
-    if (page.scrollTop <= 2) {
+    // Déclenche UNIQUEMENT si on est tout en haut
+    if (window.scrollY <= 2 && page.scrollTop <= 2) {
       startY = e.touches[0].clientY;
       startX = e.touches[0].clientX;
       pulling = true;
@@ -120,31 +126,30 @@ function initPullToRefresh() {
     const dy = e.touches[0].clientY - startY;
     const dx = Math.abs(e.touches[0].clientX - startX);
 
-    // Annule si l'utilisateur glisse horizontalement (pour les carrousels/onglets)
+    // Annule si l'utilisateur glisse horizontalement (pour ne pas bloquer les carrousels)
     if (dx > 30 && dy < 40) { pulling = false; return; }
-    // Doit être un vrai geste vers le bas et au sommet de la page
-    if (dy < 10 || page.scrollTop > 2) return;
+    // Doit être un geste vers le bas
+    if (dy < 10) return;
 
     ind.style.opacity = '1';
 
-    // Formule d'amortissement (Effet Elastique Native)
-    const pullDistance = Math.min(Math.pow(dy - 10, 0.8) * 1.5, 60); 
+    // Résistance visuelle : l'icône descend moins vite que le doigt (Effet élastique)
+    const pullDistance = Math.min(dy * 0.4, 70); 
     ind.style.transform = `translate(-50%, ${pullDistance}px) scale(1)`;
     ind.style.transition = 'none';
 
     // Rotation progressive de la flèche en tirant
-    ptrIcon.style.transform = `rotate(${dy * 1.5}deg)`;
+    ptrIcon.style.transform = `rotate(${dy * 1.2}deg)`;
     ptrIcon.style.transition = 'none';
 
-    // Seuil de déclenchement (environ 50px de descente virtuelle)
-    if (pullDistance > 50 && !activated) {
+    // Vérification de la VRAIE INTENTION
+    if (dy > INTENT_THRESHOLD && !activated) {
       activated = true;
-      ptrIcon.style.color = 'var(--accent, #10b981)'; // Devient vert
-      // Retour haptique (vibration) pour confirmer le déclenchement
-      if (navigator.vibrate) navigator.vibrate(15);
-    } else if (pullDistance <= 50 && activated) {
+      ptrIcon.style.color = 'var(--accent, #2563eb)'; // Devient bleu vif
+      if (navigator.vibrate) navigator.vibrate(20); // Petit "clic" haptique
+    } else if (dy <= INTENT_THRESHOLD && activated) {
       activated = false;
-      ptrIcon.style.color = 'var(--primary, #3b82f6)';
+      ptrIcon.style.color = 'var(--text-3, #9ca3af)'; // Redevient neutre si on remonte
     }
   }, { passive: true });
 
@@ -153,26 +158,29 @@ function initPullToRefresh() {
     pulling = false;
 
     if (activated) {
-      // Fixe l'indicateur en position de chargement et le fait tourner infiniment
+      // Intention confirmée : On lance le rechargement
       ind.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
-      ind.style.transform = 'translate(-50%, 45px) scale(1)';
-      ptrIcon.style.animation = 'spin 1s linear infinite';
+      ind.style.transform = 'translate(-50%, 50px) scale(1)';
+      ptrIcon.style.animation = 'spin 0.8s linear infinite';
       
-      // Appel de la fonction globale de rafraîchissement
+      // Appel de votre mécanique interne SPA (sans rafraîchir le navigateur complet)
       if (typeof loadAll === 'function') {
         loadAll().then(() => {
           if (typeof currentPage !== 'undefined' && currentPage === 'dashboard' && typeof renderDashboard === 'function') {
             renderDashboard();
           }
-          // Nettoyage après succès
+          // Disparition douce après succès
           ind.style.transform = 'translate(-50%, -60px) scale(0.8)';
           ind.style.opacity = '0';
-          setTimeout(() => { ptrIcon.style.animation = 'none'; ptrIcon.style.transform = 'rotate(0)'; ptrIcon.style.color = 'var(--primary)'; }, 300);
+          setTimeout(() => { ptrIcon.style.animation = 'none'; ptrIcon.style.transform = 'rotate(0)'; ptrIcon.style.color = 'var(--text-3)'; }, 300);
           if (typeof toast === 'function') toast('Actualisé ✓', 'ok');
         });
+      } else {
+        // Fallback de sécurité : rechargement natif de la page si loadAll n'existe pas
+        window.location.reload();
       }
     } else {
-      // Rétractation si annulé avant le seuil
+      // Annulation : l'utilisateur a relâché avant les 160px
       ind.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s';
       ind.style.transform = 'translate(-50%, -60px) scale(0.8)';
       ind.style.opacity = '0';
@@ -183,7 +191,7 @@ function initPullToRefresh() {
   }, { passive: true });
 }
 
-// Ajout de la règle CSS de rotation si elle n'existe pas déjà
+// Règle de rotation
 if (!document.getElementById('ptr-styles')) {
   const style = document.createElement('style');
   style.id = 'ptr-styles';
