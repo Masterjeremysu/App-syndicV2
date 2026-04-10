@@ -18,31 +18,29 @@ const PERM_MODULE_LABELS = {
   annonces:    'Annonces',
   documents:   'Documents',
   votes:       'Votes / AG',
-  registre:    'Registre d\'intervention', // Focus CS
+  registre:    'Registre d\'intervention', // Ajouté ici pour la gestion fine
   permissions: 'Gouvernance'
 };
 
 let _pp = {
   catalog:    [],
   rolePerms:  {},
-  activeRole: 'copropriétaire',
-  viewAsReal: null
+  locks:      {},
+  activeRole: 'copropriétaire'
 };
 
 /**
- * Rendu Principal - Utilise les classes .ph, .card et .dash2-chip de app.css
+ * Rendu Principal
  */
 async function renderPermissionsPage() {
   const page = document.getElementById('page');
   if (!page) return;
 
-  // Accès autorisé pour Admin, Syndic ou Membre CS (Consultation/Action)
+  // Accès : Admin ou CS
   const userRole = typeof profile !== 'undefined' ? profile.role : null;
-  const canAccess = (typeof isAdmin === 'function' && isAdmin()) || userRole === 'membre_cs';
-  
-  if (!canAccess) {
-    if (typeof nav === 'function') nav('dashboard');
-    return;
+  if (userRole !== 'administrateur' && userRole !== 'syndic' && userRole !== 'membre_cs') { 
+    if (typeof nav === 'function') nav('dashboard'); 
+    return; 
   }
 
   page.innerHTML = `
@@ -50,24 +48,34 @@ async function renderPermissionsPage() {
     <div class="ph d-flex justify-content-between align-items-start mb-4">
       <div>
         <h1>🛡️ Gouvernance & Permissions</h1>
-        <p>Gérez les accès aux modules. Le Conseil Syndical peut désormais interagir avec le Registre.</p>
+        <p>Contrôlez finement l'accès aux données, notamment le <strong>Registre</strong> pour le CS et le Syndic.</p>
       </div>
       
       <div class="card p-2 d-flex flex-row align-items-center gap-2" style="background: var(--surface-2); border-radius: var(--r-md);">
-        <span class="text-3 fw-bold px-2" style="font-size:11px">RÔLE CONFIGURÉ :</span>
-        <select id="pp-role-select" class="select py-1" style="width:160px; font-size:12px" onchange="ppSelectRole(this.value)">
-          ${PERM_ROLES_LIST.map(r => `<option value="${r}" ${r === _pp.activeRole ? 'selected' : ''}>${PERM_ROLE_LABELS[r]}</option>`).join('')}
+        <span class="text-3 fw-bold px-2" style="font-size:11px">SIMULER :</span>
+        <select class="select py-1" style="width:160px; font-size:12px" onchange="ppSimulateAs(this.value)">
+          <option value="">— Choisir —</option>
+          ${PERM_ROLES_LIST.map(r => `<option value="${r}">${PERM_ROLE_LABELS[r]}</option>`).join('')}
         </select>
       </div>
     </div>
 
     <div class="dash2-focusbar mb-4">
-      <button class="dash2-chip active">📊 Matrice des droits</button>
-      <button class="dash2-chip" onclick="toast('Bientôt disponible', 'info')">🚨 Verrous</button>
-      <button class="dash2-chip" onclick="toast('Consultez le Journal', 'info')">📜 Audit</button>
+      <button class="dash2-chip active" id="btn-tab-matrix" onclick="ppSwitchTab('matrix')">📊 Matrice des droits</button>
+      <button class="dash2-chip" id="btn-tab-emergency" onclick="ppSwitchTab('emergency')">🚨 Verrous d'urgence</button>
     </div>
 
-    <div id="pp-content-matrix">
+    <div id="pp-main-view">
+        <div class="d-flex gap-2 mb-3 align-items-center">
+          <span class="text-3 fw-bold" style="font-size:11px; text-transform:uppercase">Édition du rôle :</span>
+          ${PERM_ROLES_LIST.map(r => `
+             <button class="btn btn-xs btn-role-pill ${r === _pp.activeRole ? 'btn-primary' : 'btn-secondary'}" 
+                     data-role="${r}" onclick="ppSelectRole('${r}')">
+               ${PERM_ROLE_LABELS[r]}
+             </button>
+          `).join('')}
+        </div>
+
         <div class="card">
           <div class="tbl-wrap">
             <table>
@@ -91,16 +99,14 @@ async function renderPermissionsPage() {
 }
 
 /**
- * Génère les lignes de la matrice groupées par module
+ * Matrice des droits
  */
 async function _ppRenderMatrix() {
   const tbody = document.getElementById('pp-matrix-body');
-  const role = _pp.activeRole;
   if (!tbody) return;
 
-  if (typeof Permissions !== 'undefined') {
-    _pp.rolePerms[role] = await Permissions.getPermissionsForRole(role);
-  }
+  const role = _pp.activeRole;
+  _pp.rolePerms[role] = await Permissions.getPermissionsForRole(role);
 
   const byModule = {};
   _pp.catalog.forEach(p => {
@@ -110,11 +116,9 @@ async function _ppRenderMatrix() {
 
   let html = '';
   Object.entries(byModule).forEach(([modId, perms]) => {
-    const modLabel = PERM_MODULE_LABELS[modId] || modId;
-    
     html += `
       <tr style="background: var(--surface-2)">
-        <td colspan="2"><strong class="text-primary" style="font-size:11px; letter-spacing:0.05em;">${modLabel.toUpperCase()}</strong></td>
+        <td colspan="2"><strong class="text-primary" style="font-size:11px; letter-spacing:0.05em;">${(PERM_MODULE_LABELS[modId] || modId).toUpperCase()}</strong></td>
       </tr>`;
 
     perms.forEach(p => {
@@ -135,33 +139,83 @@ async function _ppRenderMatrix() {
         </tr>`;
     });
   });
-
   tbody.innerHTML = html;
 }
 
 /**
- * Fonctions globales pour les interactions onclick
+ * Gestion des Verrous d'Urgence (Restauré)
  */
+function _ppRenderEmergency() {
+  const container = document.getElementById('pp-main-view');
+  container.innerHTML = `
+    <div class="card p-4">
+      <h3 class="mb-2 text-danger">Arrêt d'Urgence par Rôle</h3>
+      <p class="text-3 mb-4">Coupez l'accès complet à un rôle en cas de maintenance ou d'abus suspecté.</p>
+      
+      <div class="d-flex flex-column gap-3">
+        ${PERM_ROLES_LIST.map(r => {
+          const isL = _pp.locks[r]?.locked;
+          return `
+            <div class="card p-3 d-flex justify-content-between align-items-center" style="border-color: ${isL ? 'var(--red-border)' : 'var(--border)'}; background: ${isL ? 'var(--red-light)' : 'var(--surface)'}">
+               <div>
+                 <div class="fw-bold ${isL ? 'text-danger' : ''}">${PERM_ROLE_LABELS[r]}</div>
+                 <small class="text-3">${isL ? '🚫 ACCÈS SUSPENDU' : '✅ Accès opérationnel'}</small>
+               </div>
+               <button class="btn ${isL ? 'btn-success' : 'btn-danger'}" onclick="ppToggleRoleLock('${r}', ${!isL})">
+                 ${isL ? 'Rétablir' : 'Verrouiller'}
+               </button>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Switcher d'onglets
+ */
+window.ppSwitchTab = function(tab) {
+  document.querySelectorAll('.dash2-chip').forEach(c => c.classList.remove('active'));
+  document.getElementById(`btn-tab-${tab}`).classList.add('active');
+  
+  if (tab === 'matrix') {
+    renderPermissionsPage(); // Recharge la vue matrice
+  } else if (tab === 'emergency') {
+    _ppRenderEmergency();
+  }
+};
+
 window.ppSelectRole = function(role) {
   _pp.activeRole = role;
+  document.querySelectorAll('.btn-role-pill').forEach(b => {
+    b.classList.toggle('btn-primary', b.dataset.role === role);
+    b.classList.toggle('btn-secondary', b.dataset.role !== role);
+  });
   _ppRenderMatrix();
 };
 
 window.ppTogglePerm = async function(role, permId, targetState) {
-  if (typeof Permissions !== 'undefined') {
-    const ok = await Permissions.setPermission(role, permId, targetState);
-    if (ok) {
-      _pp.rolePerms[role][permId] = targetState;
-      if (typeof toast === 'function') toast('Permission mise à jour', 'ok');
-    }
+  const ok = await Permissions.setPermission(role, permId, targetState);
+  if (ok) {
+    _pp.rolePerms[role][permId] = targetState;
+    toast('Droits mis à jour', 'ok');
+  }
+};
+
+window.ppToggleRoleLock = async function(role, locked) {
+  const ok = await Permissions.setRoleLock(role, locked, 'Maintenance');
+  if (ok) {
+    _pp.locks[role] = { locked };
+    _ppRenderEmergency();
+    toast('Statut du rôle mis à jour', 'warn');
   }
 };
 
 async function _ppLoadAll() {
-  if (typeof Permissions !== 'undefined') {
-    _pp.catalog = await Permissions.loadCatalog();
-  }
+  _pp.catalog = await Permissions.loadCatalog();
+  _pp.locks = await Permissions.getRoleLocks();
 }
 
-// Export pour le routeur
+// Global Export
 window.renderPermissionsPage = renderPermissionsPage;
