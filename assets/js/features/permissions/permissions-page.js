@@ -1,22 +1,20 @@
 // ════════════════════════════════════════════════════════════════
-//  PAGE ADMIN : GESTION DES PERMISSIONS GRANULAIRES (V3 PRO MAX)
+//  PAGE ADMIN : GESTION DES PERMISSIONS GRANULAIRES (V3)
 //  assets/js/features/permissions/permissions-page.js
 // ════════════════════════════════════════════════════════════════
 
-const PERM_ROLES_LIST = ['syndic', 'membre_cs', 'copropriétaire', 'gestionnaire_registre'];
+const PERM_ROLES_LIST = ['syndic', 'membre_cs', 'copropriétaire'];
 
 const PERM_ROLE_LABELS = {
-  syndic:                 'Syndic (Externe)',
-  membre_cs:              'Conseil Syndical',
-  'copropriétaire':       'Résident / Copro',
-  gestionnaire_registre:  'Gestionnaire Registre',
+  syndic:           'Syndic (Externe)',
+  membre_cs:        'Conseil Syndical',
+  'copropriétaire': 'Résident / Copro',
 };
 
 const PERM_ROLE_META = {
-  syndic:                { icon: '🏢', color: '#6366f1', desc: 'Gestionnaire professionnel externe' },
-  membre_cs:             { icon: '🤝', color: '#0ea5e9', desc: 'Membre élu du conseil syndical' },
-  'copropriétaire':      { icon: '🏠', color: '#10b981', desc: 'Résident ou propriétaire' },
-  gestionnaire_registre: { icon: '📋', color: '#f59e0b', desc: 'Accès dédié au registre d\'intervention' },
+  syndic:           { icon: '🏢', desc: 'Gestionnaire professionnel externe' },
+  membre_cs:        { icon: '🤝', desc: 'Membre élu du conseil syndical'     },
+  'copropriétaire': { icon: '🏠', desc: 'Résident ou propriétaire'           },
 };
 
 const PERM_MODULE_LABELS = {
@@ -41,36 +39,19 @@ const PERM_MODULE_LABELS = {
 };
 
 const PERM_MODULE_ICONS = {
-  dashboard:   '📊',
-  tickets:     '🎫',
-  map:         '🗺️',
-  messages:    '💬',
-  annonces:    '📢',
-  agenda:      '📅',
-  contacts:    '👥',
-  faq:         '❓',
-  documents:   '📄',
-  votes:       '🗳️',
-  rapport:     '📈',
-  contrats:    '📝',
-  cles:        '🔑',
-  journal:     '📜',
-  users:       '👤',
-  admin:       '⚙️',
-  registre:    '📋',
-  permissions: '🛡️'
+  dashboard: '📊', tickets: '🎫', map: '🗺️', messages: '💬',
+  annonces: '📢', agenda: '📅', contacts: '👥', faq: '❓',
+  documents: '📄', votes: '🗳️', rapport: '📈', contrats: '📝',
+  cles: '🔑', journal: '📜', users: '👤', admin: '⚙️',
+  registre: '📋', permissions: '🛡️'
 };
 
-// Modules critiques liés au Registre
-const REGISTRE_MODULES = ['registre', 'documents', 'rapport', 'journal'];
-
-// Actions possibles pour chaque module
 const ACTIONS_META = {
-  view:   { label: 'Voir',   ico: '👁',  color: '#6366f1', bg: 'rgba(99,102,241,0.12)' },
-  create: { label: 'Créer',  ico: '＋',  color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
-  edit:   { label: 'Modif',  ico: '✏',  color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-  delete: { label: 'Suppr',  ico: '✕',  color: '#ef4444', bg: 'rgba(239,68,68,0.12)'  },
-  manage: { label: 'Gérer',  ico: '⚙',  color: '#7c3aed', bg: 'rgba(124,58,237,0.12)' }
+  view:   { label: 'Voir',  ico: '👁',  colorVar: '--accent',  bgVar: '--accent-light',  borderVar: '--accent-border'  },
+  create: { label: 'Créer', ico: '＋',  colorVar: '--green',   bgVar: '--green-light',   borderVar: '--green-border'   },
+  edit:   { label: 'Modif', ico: '✏',  colorVar: '--amber',   bgVar: '--amber-light',   borderVar: '--amber-border'   },
+  delete: { label: 'Suppr', ico: '✕',  colorVar: '--red',     bgVar: '--red-light',     borderVar: '--red-border'     },
+  manage: { label: 'Gérer', ico: '⚙',  colorVar: '--violet',  bgVar: '--violet-light',  borderVar: '--violet-border'  }
 };
 
 let _pp = {
@@ -79,7 +60,7 @@ let _pp = {
   rolePerms:  {},
   locks:      {},
   changelog:  [],
-  activeRole: 'gestionnaire_registre',
+  activeRole: 'copropriétaire',
   saving:     new Set(),
   viewAsReal: null
 };
@@ -90,680 +71,292 @@ async function renderPermissionsPage() {
   if (typeof isAdmin === 'function' && !isAdmin()) { nav('dashboard'); return; }
 
   $('page').innerHTML = `
-  <div class="pp-root">
+  <style>
+    .pp-wrap { padding-bottom: 100px; animation: pageIn .22s cubic-bezier(.4,0,.2,1) both; }
 
-    <style>
-      /* ── ROOT & RESET ───────────────────────────── */
-      .pp-root {
-        font-family: 'DM Sans', 'Inter', system-ui, sans-serif;
-        background: var(--bg-page, #0f1117);
-        color: var(--text-1, #f1f5f9);
-        min-height: 100vh;
-        padding: 0 0 120px;
-      }
+    .pp-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      flex-wrap: wrap; gap: 16px; margin-bottom: 28px;
+      padding-bottom: 24px; border-bottom: 1px solid var(--border);
+    }
+    .pp-title {
+      font-family: var(--font-head); font-size: 24px; font-weight: 800;
+      letter-spacing: -.5px; color: var(--text); margin-bottom: 4px;
+    }
+    .pp-subtitle { font-size: 13px; color: var(--text-2); }
 
-      /* ── HERO HEADER ────────────────────────────── */
-      .pp-hero {
-        background: linear-gradient(135deg, #0f1117 0%, #151b27 50%, #0f1117 100%);
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-        padding: 40px 40px 32px;
-        position: relative;
-        overflow: hidden;
-      }
-      .pp-hero::before {
-        content: '';
-        position: absolute;
-        top: -60px; right: -60px;
-        width: 340px; height: 340px;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%);
-        pointer-events: none;
-      }
-      .pp-hero::after {
-        content: '';
-        position: absolute;
-        bottom: -40px; left: 30%;
-        width: 200px; height: 200px;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(245,158,11,0.07) 0%, transparent 70%);
-        pointer-events: none;
-      }
-      .pp-hero-inner {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        flex-wrap: wrap;
-        gap: 24px;
-        position: relative;
-        z-index: 1;
-      }
-      .pp-hero-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: rgba(99,102,241,0.15);
-        border: 1px solid rgba(99,102,241,0.3);
-        color: #818cf8;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 1.5px;
-        text-transform: uppercase;
-        padding: 4px 12px;
-        border-radius: 20px;
-        margin-bottom: 12px;
-      }
-      .pp-hero-title {
-        font-size: 28px;
-        font-weight: 900;
-        letter-spacing: -0.5px;
-        color: #f8fafc;
-        margin: 0 0 6px;
-        line-height: 1.2;
-      }
-      .pp-hero-sub {
-        font-size: 14px;
-        color: #64748b;
-        font-weight: 400;
-        margin: 0;
-      }
+    .pp-simulate {
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 12px 16px;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .pp-simulate-lbl {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--text-3); margin-bottom: 1px;
+    }
+    .pp-simulate-val { font-size: 13px; font-weight: 600; color: var(--text-2); }
 
-      /* ── SIMULATE BOX ───────────────────────────── */
-      .pp-simulate-box {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 16px;
-        padding: 16px 20px;
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        backdrop-filter: blur(8px);
-        min-width: 320px;
-      }
-      .pp-simulate-label {
-        font-size: 10px;
-        font-weight: 800;
-        letter-spacing: 1.2px;
-        text-transform: uppercase;
-        color: #475569;
-        margin-bottom: 2px;
-      }
-      .pp-simulate-title {
-        font-size: 13px;
-        font-weight: 700;
-        color: #94a3b8;
-      }
-      .pp-select {
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(255,255,255,0.1);
-        color: #e2e8f0;
-        border-radius: 10px;
-        padding: 9px 14px;
-        font-size: 13px;
-        font-weight: 600;
-        outline: none;
-        cursor: pointer;
-        width: 200px;
-        transition: border-color 0.2s;
-      }
-      .pp-select:focus { border-color: #6366f1; }
-      .pp-select option { background: #1e2533; }
-      .pp-btn-stop {
-        background: #ef4444;
-        color: white;
-        border: none;
-        border-radius: 10px;
-        padding: 9px 16px;
-        font-size: 12px;
-        font-weight: 800;
-        cursor: pointer;
-        display: none;
-        align-items: center;
-        gap: 6px;
-        transition: all 0.2s;
-      }
-      .pp-btn-stop:hover { background: #dc2626; transform: scale(0.98); }
+    .pp-sim-banner {
+      display: none; margin-bottom: 20px; padding: 14px 18px;
+      background: var(--orange-light); border: 1px solid var(--orange-border);
+      border-radius: var(--r-md);
+    }
+    .pp-sim-banner-inner {
+      display: flex; align-items: center; gap: 10px;
+      color: var(--orange); font-size: 13px; font-weight: 700;
+    }
 
-      /* ── SIMULATION BANNER ──────────────────────── */
-      .pp-sim-banner {
-        display: none;
-        margin: 0 40px;
-        padding: 14px 20px;
-        background: rgba(245,158,11,0.1);
-        border: 1px solid rgba(245,158,11,0.25);
-        border-radius: 12px;
-        margin-top: 16px;
-      }
-      .pp-sim-banner-inner {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        color: #f59e0b;
-        font-size: 13px;
-        font-weight: 700;
-      }
+    .pp-tabs {
+      display: flex; gap: 4px; margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .pp-tab {
+      padding: 10px 16px; font-family: var(--font-body); font-size: 13px;
+      font-weight: 700; color: var(--text-3); background: none; border: none;
+      border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px;
+      transition: color var(--t-fast), border-color var(--t-fast);
+      display: flex; align-items: center; gap: 7px;
+    }
+    .pp-tab:hover { color: var(--text-2); }
+    .pp-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-      /* ── TABS ───────────────────────────────────── */
-      .pp-tabs {
-        display: flex;
-        gap: 4px;
-        padding: 24px 40px 0;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-        background: #0f1117;
-      }
-      .pp-tab {
-        padding: 12px 20px;
-        border-radius: 10px 10px 0 0;
-        font-size: 13px;
-        font-weight: 700;
-        color: #475569;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        position: relative;
-        transition: all 0.2s;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        border-bottom: 2px solid transparent;
-        margin-bottom: -1px;
-      }
-      .pp-tab:hover { color: #94a3b8; }
-      .pp-tab.active {
-        color: #e2e8f0;
-        border-bottom-color: #6366f1;
-        background: rgba(99,102,241,0.06);
-      }
+    .pp-role-row {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
+      gap: 10px; margin-bottom: 24px;
+    }
+    .pp-role-card {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: var(--r-lg); padding: 14px 16px; cursor: pointer;
+      transition: border-color var(--t-base), box-shadow var(--t-base), transform var(--t-base);
+      display: flex; align-items: center; gap: 10px; position: relative;
+    }
+    .pp-role-card:hover { border-color: var(--border-strong); transform: translateY(-1px); box-shadow: var(--shadow); }
+    .pp-role-card.active {
+      border-color: var(--accent); background: var(--accent-light);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.08);
+    }
+    .pp-role-card.active::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 2px; background: var(--accent);
+      border-radius: var(--r-lg) var(--r-lg) 0 0;
+    }
+    .pp-role-ico {
+      width: 36px; height: 36px; border-radius: var(--r-sm);
+      background: var(--surface-2); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; flex-shrink: 0;
+    }
+    .pp-role-card.active .pp-role-ico { background: var(--accent-light); border-color: var(--accent-border); }
+    .pp-role-name { font-size: 13px; font-weight: 800; color: var(--text); margin-bottom: 2px; }
+    .pp-role-desc { font-size: 11px; color: var(--text-3); }
+    .pp-role-check {
+      margin-left: auto; width: 18px; height: 18px; border-radius: 50%;
+      background: var(--accent); display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 800; color: white; opacity: 0;
+      transition: opacity var(--t-fast); flex-shrink: 0;
+    }
+    .pp-role-card.active .pp-role-check { opacity: 1; }
 
-      /* ── BODY ───────────────────────────────────── */
-      .pp-body { padding: 32px 40px; }
+    .pp-registre-info {
+      background: var(--amber-light); border: 1px solid var(--amber-border);
+      border-radius: var(--r-md); padding: 12px 16px; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 12px;
+      font-size: 13px; color: var(--amber); font-weight: 600;
+    }
 
-      /* ── ROLE SELECTOR ──────────────────────────── */
-      .pp-role-selector {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 12px;
-        margin-bottom: 28px;
-      }
-      .pp-role-card {
-        background: rgba(255,255,255,0.03);
-        border: 1.5px solid rgba(255,255,255,0.07);
-        border-radius: 14px;
-        padding: 16px 18px;
-        cursor: pointer;
-        transition: all 0.2s;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        position: relative;
-        overflow: hidden;
-      }
-      .pp-role-card:hover {
-        background: rgba(255,255,255,0.05);
-        border-color: rgba(255,255,255,0.15);
-        transform: translateY(-1px);
-      }
-      .pp-role-card.active {
-        border-color: var(--rc, #6366f1);
-        background: rgba(var(--rc-rgb, 99,102,241), 0.1);
-        box-shadow: 0 4px 24px rgba(var(--rc-rgb, 99,102,241), 0.15);
-      }
-      .pp-role-card.active::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0;
-        height: 2px;
-        background: var(--rc, #6366f1);
-      }
-      .pp-role-icon {
-        width: 38px; height: 38px;
-        border-radius: 10px;
-        background: rgba(255,255,255,0.06);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 18px;
-        flex-shrink: 0;
-      }
-      .pp-role-name {
-        font-size: 13px;
-        font-weight: 800;
-        color: #e2e8f0;
-        margin-bottom: 2px;
-      }
-      .pp-role-desc {
-        font-size: 11px;
-        color: #475569;
-        font-weight: 500;
-      }
-      .pp-role-check {
-        margin-left: auto;
-        width: 20px; height: 20px;
-        border-radius: 50%;
-        background: var(--rc, #6366f1);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 11px;
-        color: white;
-        opacity: 0;
-        transition: opacity 0.2s;
-        flex-shrink: 0;
-      }
-      .pp-role-card.active .pp-role-check { opacity: 1; }
+    .pp-lock-banner {
+      background: var(--red-light); border: 1px solid var(--red-border);
+      border-radius: var(--r-md); padding: 12px 18px; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 10px;
+      color: var(--red); font-size: 13px; font-weight: 700;
+    }
 
-      /* ── REGISTRE SPOTLIGHT ─────────────────────── */
-      .pp-registre-spotlight {
-        background: linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(251,191,36,0.04) 100%);
-        border: 1px solid rgba(245,158,11,0.2);
-        border-radius: 16px;
-        padding: 20px 24px;
-        margin-bottom: 24px;
-        display: flex;
-        align-items: flex-start;
-        gap: 16px;
-        position: relative;
-        overflow: hidden;
-      }
-      .pp-registre-spotlight::before {
-        content: '';
-        position: absolute;
-        right: -20px; top: -20px;
-        width: 100px; height: 100px;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(245,158,11,0.15) 0%, transparent 70%);
-      }
-      .pp-registre-icon {
-        width: 48px; height: 48px;
-        border-radius: 12px;
-        background: rgba(245,158,11,0.15);
-        border: 1px solid rgba(245,158,11,0.25);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 22px;
-        flex-shrink: 0;
-      }
-      .pp-registre-spotlight h4 {
-        font-size: 14px;
-        font-weight: 800;
-        color: #fbbf24;
-        margin: 0 0 4px;
-      }
-      .pp-registre-spotlight p {
-        font-size: 12px;
-        color: #92400e;
-        color: rgba(251,191,36,0.6);
-        margin: 0 0 12px;
-      }
-      .pp-registre-modules {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-      }
-      .pp-registre-badge {
-        background: rgba(245,158,11,0.15);
-        border: 1px solid rgba(245,158,11,0.25);
-        color: #fbbf24;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.5px;
-        padding: 3px 10px;
-        border-radius: 20px;
-      }
+    .pp-table-wrap {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r-lg); overflow: hidden;
+    }
+    .pp-table-head {
+      display: grid; grid-template-columns: 1fr 130px 80px;
+      background: var(--surface-2); border-bottom: 1px solid var(--border);
+      padding: 10px 20px; font-size: 10px; font-weight: 800;
+      text-transform: uppercase; letter-spacing: .08em; color: var(--text-3);
+    }
 
-      /* ── LOCK BANNER ────────────────────────────── */
-      .pp-lock-banner {
-        background: rgba(239,68,68,0.08);
-        border: 1px solid rgba(239,68,68,0.2);
-        border-radius: 12px;
-        padding: 14px 20px;
-        margin-bottom: 16px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        color: #f87171;
-        font-size: 13px;
-        font-weight: 700;
-      }
+    .pp-module { border-bottom: 1px solid var(--border); }
+    .pp-module:last-child { border-bottom: none; }
+    .pp-module-registre { border-left: 3px solid var(--amber); }
 
-      /* ── TABLE HEADER ───────────────────────────── */
-      .pp-table-head {
-        display: grid;
-        grid-template-columns: 1fr 130px 90px;
-        background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 12px 12px 0 0;
-        padding: 12px 24px;
-        font-size: 10px;
-        font-weight: 800;
-        letter-spacing: 1px;
-        text-transform: uppercase;
-        color: #334155;
-      }
+    .pp-module-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 20px; cursor: pointer; background: var(--surface-2);
+      transition: background var(--t-fast);
+    }
+    .pp-module-header:hover { background: var(--surface-3); }
+    .pp-module-registre .pp-module-header { background: var(--amber-light); }
+    .pp-module-registre .pp-module-header:hover { background: var(--amber-light); filter: brightness(.97); }
 
-      /* ── MODULE GROUP ───────────────────────────── */
-      .pp-module-group {
-        border: 1px solid rgba(255,255,255,0.06);
-        border-top: none;
-        overflow: hidden;
-        transition: all 0.2s;
-      }
-      .pp-module-group:last-child { border-radius: 0 0 12px 12px; }
-      .pp-module-group.registre-group {
-        border-color: rgba(245,158,11,0.2);
-        background: rgba(245,158,11,0.02);
-      }
+    .pp-module-left { display: flex; align-items: center; gap: 10px; }
+    .pp-module-icon {
+      width: 26px; height: 26px; border-radius: 6px;
+      background: var(--surface); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; flex-shrink: 0;
+    }
+    .pp-module-registre .pp-module-icon { background: var(--amber-light); border-color: var(--amber-border); }
+    .pp-module-name { font-family: var(--font-head); font-size: 13px; font-weight: 700; color: var(--text); }
+    .pp-module-count {
+      display: inline-flex; align-items: center; padding: 1px 8px;
+      border-radius: 999px; font-size: 10.5px; font-weight: 700;
+      background: var(--surface-3); color: var(--text-3); border: 1px solid var(--border);
+    }
+    .pp-module-count.full { background: var(--green-light); color: var(--green); border-color: var(--green-border); }
+    .pp-module-count.zero { background: var(--surface-2); color: var(--text-3); }
+    .pp-module-new {
+      display: inline-flex; align-items: center; padding: 2px 8px;
+      border-radius: 999px; font-size: 10px; font-weight: 800;
+      text-transform: uppercase; background: var(--amber); color: #fff;
+    }
+    .pp-module-chevron { color: var(--text-3); transition: transform .2s ease; }
+    .pp-module-chevron.open { transform: rotate(180deg); }
 
-      .pp-module-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 14px 24px;
-        background: rgba(255,255,255,0.02);
-        cursor: pointer;
-        transition: background 0.15s;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
-      }
-      .pp-module-header:hover { background: rgba(255,255,255,0.04); }
-      .pp-module-header.registre-header {
-        background: rgba(245,158,11,0.04);
-      }
-      .pp-module-header.registre-header:hover {
-        background: rgba(245,158,11,0.08);
-      }
-      .pp-module-title {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .pp-module-icon {
-        width: 28px; height: 28px;
-        border-radius: 7px;
-        background: rgba(255,255,255,0.05);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 14px;
-      }
-      .pp-module-name {
-        font-size: 13.5px;
-        font-weight: 800;
-        color: #cbd5e1;
-      }
-      .pp-module-badge {
-        display: inline-flex;
-        align-items: center;
-        background: rgba(255,255,255,0.05);
-        border-radius: 20px;
-        padding: 2px 10px;
-        font-size: 11px;
-        font-weight: 700;
-        color: #475569;
-      }
-      .pp-module-badge.full { background: rgba(16,185,129,0.12); color: #34d399; }
-      .pp-module-chevron {
-        transition: transform 0.2s;
-        color: #334155;
-      }
-      .pp-module-chevron.open { transform: rotate(180deg); }
+    .pp-perm-row {
+      display: grid; grid-template-columns: 1fr 130px 80px;
+      align-items: center; padding: 11px 20px;
+      border-top: 1px solid var(--border);
+      transition: background var(--t-fast); gap: 12px;
+    }
+    .pp-perm-row:hover { background: var(--bg); }
+    .pp-perm-label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 1px; }
+    .pp-perm-desc  { font-size: 11px; color: var(--text-3); }
 
-      /* ── PERM ROW ───────────────────────────────── */
-      .pp-perm-row {
-        display: grid;
-        grid-template-columns: 1fr 130px 90px;
-        align-items: center;
-        padding: 13px 24px;
-        border-bottom: 1px solid rgba(255,255,255,0.03);
-        transition: background 0.12s;
-        gap: 16px;
-      }
-      .pp-perm-row:last-child { border-bottom: none; }
-      .pp-perm-row:hover { background: rgba(255,255,255,0.025); }
-      .pp-perm-label {
-        font-size: 13px;
-        font-weight: 700;
-        color: #94a3b8;
-        margin-bottom: 2px;
-      }
-      .pp-perm-desc {
-        font-size: 11px;
-        color: #334155;
-        font-weight: 500;
-      }
+    .pp-action-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .04em; padding: 3px 9px;
+      border-radius: var(--r-xs); border: 1px solid; width: fit-content;
+    }
 
-      /* ── ACTION TAG ─────────────────────────────── */
-      .pp-action-tag {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        padding: 4px 10px;
-        border-radius: 7px;
-        border: 1px solid;
-        width: fit-content;
-      }
+    .pp-toggle {
+      width: 42px; height: 22px; border-radius: 11px;
+      background: var(--border-strong); border: 1.5px solid var(--border);
+      position: relative; cursor: pointer; display: block; margin: 0 auto;
+      transition: background .28s cubic-bezier(.175,.885,.32,1.275),
+                  border-color .28s ease, box-shadow .28s ease;
+    }
+    .pp-toggle.on { background: var(--green); border-color: var(--green); box-shadow: 0 0 0 3px var(--green-light); }
+    .pp-toggle::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 14px; height: 14px; border-radius: 50%; background: white;
+      transition: transform .28s cubic-bezier(.175,.885,.32,1.275);
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+    }
+    .pp-toggle.on::after { transform: translateX(20px); }
+    .pp-toggle.saving { opacity: .45; pointer-events: none; }
 
-      /* ── TOGGLE ─────────────────────────────────── */
-      .pp-toggle {
-        width: 44px;
-        height: 24px;
-        border-radius: 12px;
-        background: rgba(255,255,255,0.08);
-        border: 1px solid rgba(255,255,255,0.1);
-        position: relative;
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        display: block;
-        margin: 0 auto;
-      }
-      .pp-toggle.on {
-        background: #22c55e;
-        border-color: #22c55e;
-        box-shadow: 0 0 12px rgba(34,197,94,0.35);
-      }
-      .pp-toggle::after {
-        content: '';
-        position: absolute;
-        top: 3px; left: 3px;
-        width: 16px; height: 16px;
-        border-radius: 50%;
-        background: rgba(255,255,255,0.5);
-        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-      }
-      .pp-toggle.on::after {
-        transform: translateX(20px);
-        background: white;
-      }
-      .pp-toggle.saving { opacity: 0.4; pointer-events: none; }
+    .pp-emergency-list { display: flex; flex-direction: column; gap: 10px; }
+    .pp-emergency-card {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 20px; border: 1.5px solid var(--border);
+      border-radius: var(--r-lg); background: var(--surface);
+      transition: border-color var(--t-base), background var(--t-base);
+    }
+    .pp-emergency-card.locked { border-color: var(--red-border); background: var(--red-light); }
+    .pp-emergency-left { display: flex; align-items: center; gap: 12px; }
+    .pp-emergency-name { font-size: 14px; font-weight: 800; color: var(--text); margin-bottom: 3px; }
+    .pp-emergency-status { font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 5px; }
+    .pp-emergency-status.ok { color: var(--green); }
+    .pp-emergency-status.locked { color: var(--red); }
 
-      /* ── EMERGENCY GRID ─────────────────────────── */
-      .pp-emergency-grid { display: grid; gap: 12px; }
-      .pp-emergency-card {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 20px 24px;
-        border: 1.5px solid rgba(255,255,255,0.07);
-        border-radius: 16px;
-        background: rgba(255,255,255,0.02);
-        transition: all 0.2s;
-      }
-      .pp-emergency-card.locked {
-        border-color: rgba(239,68,68,0.3);
-        background: rgba(239,68,68,0.05);
-      }
-      .pp-emergency-role-name {
-        font-size: 15px;
-        font-weight: 800;
-        color: #e2e8f0;
-        margin-bottom: 4px;
-      }
-      .pp-emergency-status {
-        font-size: 12px;
-        font-weight: 700;
-      }
-      .pp-emergency-status.ok { color: #34d399; }
-      .pp-emergency-status.locked { color: #f87171; }
-      .pp-btn-lock {
-        border: none;
-        border-radius: 10px;
-        padding: 10px 18px;
-        font-size: 13px;
-        font-weight: 800;
-        cursor: pointer;
-        transition: all 0.2s;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .pp-btn-lock.lock { background: #ef4444; color: white; }
-      .pp-btn-lock.unlock { background: #22c55e; color: white; }
-      .pp-btn-lock:hover { transform: scale(0.97); filter: brightness(0.9); }
+    .pp-logs-head {
+      display: grid; grid-template-columns: 90px 1fr 180px 130px;
+      padding: 10px 20px; background: var(--surface-2); border-bottom: 1px solid var(--border);
+      font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3);
+    }
+    .pp-logs-row {
+      display: grid; grid-template-columns: 90px 1fr 180px 130px;
+      padding: 11px 20px; border-top: 1px solid var(--border);
+      font-size: 12px; align-items: center; transition: background var(--t-fast); color: var(--text);
+    }
+    .pp-logs-row:hover { background: var(--bg); }
+    .pp-log-action {
+      display: inline-flex; align-items: center; padding: 2px 8px;
+      border-radius: 999px; font-size: 10.5px; font-weight: 800; border: 1px solid;
+    }
+    .pp-log-action.granted { background: var(--green-light); color: var(--green); border-color: var(--green-border); }
+    .pp-log-action.revoked { background: var(--red-light);   color: var(--red);   border-color: var(--red-border);   }
 
-      /* ── LOGS TABLE ─────────────────────────────── */
-      .pp-logs-table { border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; overflow: hidden; }
-      .pp-logs-head {
-        display: grid;
-        grid-template-columns: 90px 1fr 160px 130px;
-        background: rgba(255,255,255,0.03);
-        padding: 12px 24px;
-        font-size: 10px;
-        font-weight: 800;
-        letter-spacing: 1px;
-        text-transform: uppercase;
-        color: #334155;
-      }
-      .pp-logs-row {
-        display: grid;
-        grid-template-columns: 90px 1fr 160px 130px;
-        padding: 12px 24px;
-        font-size: 12px;
-        border-top: 1px solid rgba(255,255,255,0.04);
-        align-items: center;
-        transition: background 0.1s;
-      }
-      .pp-logs-row:hover { background: rgba(255,255,255,0.02); }
-      .pp-logs-action {
-        font-size: 11px;
-        font-weight: 800;
-        letter-spacing: 0.5px;
-        padding: 3px 8px;
-        border-radius: 6px;
-        width: fit-content;
-      }
-      .pp-logs-action.granted { background: rgba(34,197,94,0.12); color: #4ade80; }
-      .pp-logs-action.revoked { background: rgba(239,68,68,0.12); color: #f87171; }
+    .pp-section-title {
+      font-size: 10px; font-weight: 800; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--text-3); margin-bottom: 12px;
+    }
+    .pp-loading { display: flex; align-items: center; justify-content: center; padding: 48px; }
+  </style>
 
-      /* ── SECTION TITLE ──────────────────────────── */
-      .pp-section-title {
-        font-size: 11px;
-        font-weight: 800;
-        letter-spacing: 1.5px;
-        text-transform: uppercase;
-        color: #334155;
-        margin-bottom: 16px;
-      }
+  <div class="pp-wrap">
 
-      /* ── EMPTY ──────────────────────────────────── */
-      .pp-empty {
-        padding: 48px;
-        text-align: center;
-        color: #334155;
-        font-size: 14px;
-        font-weight: 600;
-      }
-    </style>
-
-    <!-- HERO -->
-    <div class="pp-hero">
-      <div class="pp-hero-inner">
+    <div class="pp-header">
+      <div>
+        <h1 class="pp-title">🛡️ Gouvernance & Permissions</h1>
+        <p class="pp-subtitle">Contrôlez finement l'accès aux données pour chaque profil de la copropriété.</p>
+      </div>
+      <div class="pp-simulate">
         <div>
-          <div class="pp-hero-badge">⚡ Admin · Sécurité</div>
-          <h1 class="pp-hero-title">Gouvernance & Permissions</h1>
-          <p class="pp-hero-sub">Contrôle granulaire des accès pour chaque profil de la copropriété.</p>
+          <div class="pp-simulate-lbl">Mode Test</div>
+          <div class="pp-simulate-val">Simuler un profil</div>
         </div>
-        <div class="pp-simulate-box">
-          <div>
-            <div class="pp-simulate-label">Mode Test</div>
-            <div class="pp-simulate-title">Simuler un profil</div>
-          </div>
-          <select id="view-as-select" class="pp-select" onchange="ppSimulateAs(this.value)">
-            <option value="">— Choisir —</option>
-            ${PERM_ROLES_LIST.map(r => `<option value="${r}">${PERM_ROLE_LABELS[r]}</option>`).join('')}
-          </select>
-          <button id="view-as-stop" class="pp-btn-stop" onclick="ppStopSimulation()">✕ Quitter</button>
-        </div>
+        <select id="view-as-select" class="select" style="width:190px; margin:0;"
+                onchange="ppSimulateAs(this.value)">
+          <option value="">— Choisir —</option>
+          ${PERM_ROLES_LIST.map(r => `<option value="${r}">${PERM_ROLE_LABELS[r]}</option>`).join('')}
+        </select>
+        <button id="view-as-stop" class="btn btn-danger btn-sm"
+                style="display:none;" onclick="ppStopSimulation()">✕ Quitter</button>
       </div>
     </div>
 
-    <!-- SIM BANNER -->
     <div id="view-as-banner" class="pp-sim-banner">
       <div class="pp-sim-banner-inner">
         <span style="font-size:20px;">👁</span>
-        <div>
-          <span style="font-size:11px; letter-spacing:1px; text-transform:uppercase; opacity:0.7;">Session de simulation active — </span>
-          Vous naviguez avec les droits d'un <strong><span id="view-as-label"></span></strong>. Aucune modification enregistrée.
+        <div>SESSION DE SIMULATION ACTIVE —
+          Vous naviguez avec les droits d'un
+          <strong><span id="view-as-label"></span></strong>.
+          Les modifications ne sont pas enregistrées.
         </div>
       </div>
     </div>
 
-    <!-- TABS -->
     <div class="pp-tabs">
-      <button class="pp-tab active" onclick="ppSwitchTab(this, 'matrix')">
-        <span>📊</span> Matrice des droits
-      </button>
-      <button class="pp-tab" onclick="ppSwitchTab(this, 'emergency')">
-        <span>🚨</span> Verrous d'urgence
-      </button>
-      <button class="pp-tab" onclick="ppSwitchTab(this, 'logs')">
-        <span>📜</span> Historique
-      </button>
+      <button class="pp-tab active" onclick="ppSwitchTab(this, 'matrix')">📊 Matrice des droits</button>
+      <button class="pp-tab" onclick="ppSwitchTab(this, 'emergency')">🚨 Verrous d'urgence</button>
+      <button class="pp-tab" onclick="ppSwitchTab(this, 'logs')">📜 Historique</button>
     </div>
 
-    <!-- BODY -->
-    <div class="pp-body">
-
-      <!-- MATRIX -->
-      <div id="pp-content-matrix">
-        <div class="pp-section-title">Rôle à configurer</div>
-        <div class="pp-role-selector" id="pp-role-selector">
-          ${PERM_ROLES_LIST.map(r => {
-            const meta = PERM_ROLE_META[r];
-            const isActive = r === _pp.activeRole;
-            return `
-              <div class="pp-role-card ${isActive ? 'active' : ''}"
-                   data-role="${r}"
-                   style="--rc:${meta.color};"
-                   onclick="ppSelectRole('${r}')">
-                <div class="pp-role-icon">${meta.icon}</div>
-                <div style="flex:1; min-width:0;">
-                  <div class="pp-role-name">${PERM_ROLE_LABELS[r]}</div>
-                  <div class="pp-role-desc">${meta.desc}</div>
-                </div>
-                <div class="pp-role-check">✓</div>
-              </div>
-            `;
-          }).join('')}
-        </div>
-
-        <div id="pp-registre-spotlight" style="display:none;">
-          <div class="pp-registre-spotlight">
-            <div class="pp-registre-icon">📋</div>
-            <div style="position:relative; z-index:1;">
-              <h4>🆕 Nouveau rôle — Gestionnaire Registre</h4>
-              <p>Ce rôle est dédié à la gestion du Registre d'intervention. Configurez précisément les accès aux modules concernés.</p>
-              <div class="pp-registre-modules">
-                ${REGISTRE_MODULES.map(m => `<span class="pp-registre-badge">📋 ${PERM_MODULE_LABELS[m] || m}</span>`).join('')}
-              </div>
+    <div id="pp-content-matrix">
+      <div class="pp-section-title">Rôle à configurer</div>
+      <div class="pp-role-row" id="pp-role-row">
+        ${PERM_ROLES_LIST.map(r => {
+          const meta = PERM_ROLE_META[r];
+          const isActive = r === _pp.activeRole;
+          return `
+          <div class="pp-role-card ${isActive ? 'active' : ''}"
+               data-role="${r}" onclick="ppSelectRole('${r}')">
+            <div class="pp-role-ico">${meta.icon}</div>
+            <div style="flex:1; min-width:0;">
+              <div class="pp-role-name">${PERM_ROLE_LABELS[r]}</div>
+              <div class="pp-role-desc">${meta.desc}</div>
             </div>
-          </div>
-        </div>
-
-        <div id="pp-matrix-grid">
-          <div class="pp-empty"><div class="spinner"></div></div>
-        </div>
+            <div class="pp-role-check">✓</div>
+          </div>`;
+        }).join('')}
       </div>
-
-      <div id="pp-content-emergency" style="display:none;"></div>
-      <div id="pp-content-logs" style="display:none;"></div>
-
+      <div id="pp-matrix-grid">
+        <div class="pp-loading"><div class="spin"></div></div>
+      </div>
     </div>
+
+    <div id="pp-content-emergency" style="display:none;"></div>
+    <div id="pp-content-logs" style="display:none;"></div>
+
   </div>
   `;
 
@@ -771,7 +364,7 @@ async function renderPermissionsPage() {
   _ppRenderMatrix();
 }
 
-// ── LOGIQUE DE CHARGEMENT ─────────────────────────────────────────
+// ── CHARGEMENT ────────────────────────────────────────────────────
 
 async function _ppLoadAll() {
   const [catalog, locks, changelog] = await Promise.all([
@@ -793,120 +386,128 @@ async function _ppLoadAll() {
   _pp.rolePerms[_pp.activeRole] = await Permissions.getPermissionsForRole(_pp.activeRole);
 }
 
-// ── NAVIGATION ONGLETS ───────────────────────────────────────────
+// ── TABS ──────────────────────────────────────────────────────────
 
 function ppSwitchTab(btn, target) {
   document.querySelectorAll('.pp-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-
   ['matrix', 'emergency', 'logs'].forEach(t => {
     $(`pp-content-${t}`).style.display = (t === target) ? 'block' : 'none';
   });
-
   if (target === 'emergency') _ppRenderEmergency();
   if (target === 'logs')      _ppRenderLogs();
 }
 
-// ── SÉLECTION DU RÔLE ───────────────────────────────────────────
+// ── SÉLECTION RÔLE ────────────────────────────────────────────────
 
 function ppSelectRole(role) {
   _pp.activeRole = role;
-
   document.querySelectorAll('.pp-role-card').forEach(c => {
     c.classList.toggle('active', c.dataset.role === role);
   });
-
-  // Spotlight Registre uniquement pour ce rôle
-  const spotlight = $('pp-registre-spotlight');
-  if (spotlight) spotlight.style.display = (role === 'gestionnaire_registre') ? 'block' : 'none';
-
   _ppRenderMatrix();
 }
 
-// ── RENDU MATRICE ────────────────────────────────────────────────
+// ── MATRICE ───────────────────────────────────────────────────────
 
 async function _ppRenderMatrix() {
   const container = $('pp-matrix-grid');
   const role      = _pp.activeRole;
 
   if (!_pp.rolePerms[role]) {
-    container.innerHTML = '<div class="pp-empty"><div class="spinner"></div></div>';
+    container.innerHTML = '<div class="pp-loading"><div class="spin"></div></div>';
     _pp.rolePerms[role] = await Permissions.getPermissionsForRole(role);
   }
 
   const isLocked = _pp.locks[role]?.locked === true;
 
-  // Affiche le spotlight Registre au premier render
-  const spotlight = $('pp-registre-spotlight');
-  if (spotlight) spotlight.style.display = (role === 'gestionnaire_registre') ? 'block' : 'none';
+  let html = '';
 
-  let html = `
+  if (isLocked) {
+    html += `<div class="pp-lock-banner">
+      ⚠️ Ce rôle est actuellement verrouillé — toutes les permissions sont révoquées.
+    </div>`;
+  }
+
+  // Bannière module Registre (nouvellement disponible)
+  if (_pp.byModule['registre']) {
+    html += `<div class="pp-registre-info">
+      <span style="font-size:20px; flex-shrink:0;">📋</span>
+      <div>
+        <strong>Nouveau — Registre d'intervention.</strong>
+        Configurez les permissions d'accès à ce module pour ce rôle.
+      </div>
+    </div>`;
+  }
+
+  html += `<div class="pp-table-wrap">
     <div class="pp-table-head">
       <div>Fonctionnalité / Permission</div>
       <div>Action</div>
       <div style="text-align:center;">Accès</div>
-    </div>
-  `;
+    </div>`;
 
-  if (isLocked) {
-    html = `<div class="pp-lock-banner">⚠️ Ce rôle est actuellement verrouillé — toutes les permissions sont révoquées.</div>` + html;
-  }
-
-  // Trier : modules Registre en premier si rôle gestionnaire_registre
-  let moduleEntries = Object.entries(_pp.byModule);
-  if (role === 'gestionnaire_registre') {
-    moduleEntries = [
-      ...moduleEntries.filter(([m]) => REGISTRE_MODULES.includes(m)),
-      ...moduleEntries.filter(([m]) => !REGISTRE_MODULES.includes(m)),
-    ];
-  }
-
-  moduleEntries.forEach(([modId, perms]) => {
-    const grantedCount = perms.filter(p => _pp.rolePerms[role]?.[p.id]).length;
-    const label        = PERM_MODULE_LABELS[modId] || modId;
-    const icon         = PERM_MODULE_ICONS[modId] || '📦';
-    const isFullAccess = grantedCount === perms.length && perms.length > 0;
-    const isRegistreMod = REGISTRE_MODULES.includes(modId);
-    const isRegistreRole = role === 'gestionnaire_registre';
-
-    html += `
-    <div class="pp-module-group ${(isRegistreMod && isRegistreRole) ? 'registre-group' : ''}">
-      <div class="pp-module-header ${(isRegistreMod && isRegistreRole) ? 'registre-header' : ''}" onclick="ppToggleModuleUI('${modId}')">
-        <div class="pp-module-title">
-          <div class="pp-module-icon">${icon}</div>
-          <span class="pp-module-name">${label}</span>
-          ${(isRegistreMod && isRegistreRole) ? '<span style="font-size:10px; background:rgba(245,158,11,0.15); color:#fbbf24; padding:2px 8px; border-radius:10px; font-weight:800; letter-spacing:0.5px;">REGISTRE</span>' : ''}
-          <span class="pp-module-badge ${isFullAccess ? 'full' : ''}">${grantedCount} / ${perms.length}</span>
-        </div>
-        <svg id="pp-chev-${modId}" class="pp-module-chevron open" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
-      </div>
-      <div id="pp-body-${modId}">
-        ${perms.map(p => {
-          const isOn = _pp.rolePerms[role]?.[p.id] === true;
-          const meta = ACTIONS_META[p.action] || { label: p.action, ico: '•', color: '#64748b', bg: 'rgba(100,116,139,0.1)' };
-          return `
-            <div class="pp-perm-row">
-              <div>
-                <div class="pp-perm-label">${escHtml(p.label)}</div>
-                <div class="pp-perm-desc">${escHtml(p.description || '')}</div>
-              </div>
-              <div>
-                <span class="pp-action-tag" style="color:${meta.color}; background:${meta.bg}; border-color:${meta.color}33;">
-                  ${meta.ico} ${meta.label}
-                </span>
-              </div>
-              <div style="text-align:center;">
-                <button class="pp-toggle ${isOn ? 'on' : ''}"
-                        onclick="ppTogglePerm('${role}', '${p.id}', ${!isOn})"></button>
-              </div>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    </div>
-    `;
+  // Registre en tête de liste
+  const sortedModules = Object.entries(_pp.byModule).sort(([a], [b]) => {
+    if (a === 'registre') return -1;
+    if (b === 'registre') return  1;
+    return 0;
   });
 
+  sortedModules.forEach(([modId, perms]) => {
+    const grantedCount = perms.filter(p => _pp.rolePerms[role]?.[p.id]).length;
+    const label        = PERM_MODULE_LABELS[modId] || modId;
+    const icon         = PERM_MODULE_ICONS[modId]  || '📦';
+    const isRegistre   = modId === 'registre';
+    const isFull       = grantedCount === perms.length && perms.length > 0;
+    const isZero       = grantedCount === 0;
+    const countClass   = isFull ? 'full' : isZero ? 'zero' : '';
+
+    html += `
+      <div class="pp-module${isRegistre ? ' pp-module-registre' : ''}">
+        <div class="pp-module-header" onclick="ppToggleModuleUI('${modId}')">
+          <div class="pp-module-left">
+            <div class="pp-module-icon">${icon}</div>
+            <span class="pp-module-name">${label}</span>
+            ${isRegistre ? '<span class="pp-module-new">Nouveau</span>' : ''}
+            <span class="pp-module-count ${countClass}">${grantedCount}/${perms.length}</span>
+          </div>
+          <svg id="pp-chev-${modId}" class="pp-module-chevron open"
+               width="15" height="15" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </div>
+        <div id="pp-body-${modId}">
+          ${perms.map(p => {
+            const isOn = _pp.rolePerms[role]?.[p.id] === true;
+            const meta = ACTIONS_META[p.action] || {
+              label: p.action, ico: '•',
+              colorVar: '--text-2', bgVar: '--surface-2', borderVar: '--border'
+            };
+            return `
+              <div class="pp-perm-row">
+                <div>
+                  <div class="pp-perm-label">${escHtml(p.label)}</div>
+                  <div class="pp-perm-desc">${escHtml(p.description || '')}</div>
+                </div>
+                <div>
+                  <span class="pp-action-tag"
+                    style="color:var(${meta.colorVar}); background:var(${meta.bgVar}); border-color:var(${meta.borderVar});">
+                    ${meta.ico} ${meta.label}
+                  </span>
+                </div>
+                <div style="text-align:center;">
+                  <button class="pp-toggle ${isOn ? 'on' : ''}"
+                          onclick="ppTogglePerm('${role}', '${p.id}', ${!isOn})"></button>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  });
+
+  html += `</div>`;
   container.innerHTML = html;
 }
 
@@ -921,7 +522,6 @@ function ppToggleModuleUI(modId) {
 
 async function ppTogglePerm(role, permId, targetState) {
   const { data: ok } = await Permissions.setPermission(role, permId, targetState);
-
   if (ok !== false) {
     _pp.rolePerms[role][permId] = targetState;
     _ppRenderMatrix();
@@ -931,49 +531,45 @@ async function ppTogglePerm(role, permId, targetState) {
   }
 }
 
-// ── EMERGENCY LOCKS ──────────────────────────────────────────────
+// ── EMERGENCY LOCKS ───────────────────────────────────────────────
 
 function _ppRenderEmergency() {
   const container = $('pp-content-emergency');
   container.innerHTML = `
-    <div style="max-width:720px;">
-      <div style="margin-bottom:24px;">
-        <div class="pp-section-title">Arrêt d'Urgence par Rôle</div>
-        <p style="font-size:14px; color:#64748b; margin:0; line-height:1.6;">
-          Suspendez instantanément l'accès complet d'un rôle en cas d'abus ou de maintenance critique.
-          Les utilisateurs concernés ne pourront plus accéder à aucune fonctionnalité jusqu'au rétablissement.
-        </p>
-      </div>
-      <div class="pp-emergency-grid">
+    <div style="max-width:680px;">
+      <div class="pp-section-title">Arrêt d'urgence par rôle</div>
+      <p style="font-size:13px; color:var(--text-2); margin-bottom:20px; line-height:1.6;">
+        Suspendez l'accès complet d'un rôle en cas d'abus ou lors d'une maintenance critique.
+        Les utilisateurs concernés ne pourront accéder à aucune fonctionnalité.
+      </p>
+      <div class="pp-emergency-list">
         ${PERM_ROLES_LIST.map(r => {
           const isL  = _pp.locks[r]?.locked;
           const meta = PERM_ROLE_META[r];
           return `
             <div class="pp-emergency-card ${isL ? 'locked' : ''}">
-              <div style="display:flex; align-items:center; gap:14px;">
-                <div class="pp-role-icon" style="background:rgba(255,255,255,0.04);">${meta.icon}</div>
+              <div class="pp-emergency-left">
+                <div class="pp-role-ico">${meta.icon}</div>
                 <div>
-                  <div class="pp-emergency-role-name">${PERM_ROLE_LABELS[r]}</div>
+                  <div class="pp-emergency-name">${PERM_ROLE_LABELS[r]}</div>
                   <div class="pp-emergency-status ${isL ? 'locked' : 'ok'}">
                     ${isL ? '🚫 Accès suspendu' : '✅ Accès opérationnel'}
                   </div>
                 </div>
               </div>
-              <button class="pp-btn-lock ${isL ? 'unlock' : 'lock'}" onclick="ppToggleRoleLock('${r}', ${!isL})">
-                ${isL ? '🔓 Rétablir l\'accès' : '🔒 Verrouiller'}
+              <button class="btn ${isL ? 'btn-accent' : 'btn-danger'} btn-sm"
+                      onclick="ppToggleRoleLock('${r}', ${!isL})">
+                ${isL ? '🔓 Rétablir' : '🔒 Verrouiller'}
               </button>
-            </div>
-          `;
+            </div>`;
         }).join('')}
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 async function ppToggleRoleLock(role, locked) {
   let reason = '';
-  if (locked) reason = prompt('Raison du verrouillage (sera affichée aux résidents) :') || 'Maintenance';
-
+  if (locked) reason = prompt('Raison du verrouillage (visible par les résidents) :') || 'Maintenance';
   const ok = await Permissions.setRoleLock(role, locked, reason);
   if (ok) {
     _pp.locks[role] = { locked };
@@ -983,72 +579,62 @@ async function ppToggleRoleLock(role, locked) {
   }
 }
 
-// ── SIMULATION "VIEW AS" ────────────────────────────────────────
+// ── SIMULATION ────────────────────────────────────────────────────
 
 async function ppSimulateAs(role) {
   if (!role) { ppStopSimulation(); return; }
-
   if (!_pp.viewAsReal) _pp.viewAsReal = { ...profile };
-  profile = { ..._pp.viewAsReal, role: role };
-
+  profile = { ..._pp.viewAsReal, role };
   await Permissions.load();
   if (typeof initUI === 'function') initUI();
-
   $('view-as-banner').style.display = 'block';
-  $('view-as-label').textContent     = PERM_ROLE_LABELS[role].toUpperCase();
-  $('view-as-stop').style.display    = 'flex';
-  $('view-as-select').value          = role;
-
-  toast(`Simulation active : Profil ${PERM_ROLE_LABELS[role]}`, 'warn');
+  $('view-as-label').textContent    = PERM_ROLE_LABELS[role].toUpperCase();
+  $('view-as-stop').style.display   = 'inline-flex';
+  $('view-as-select').value         = role;
+  toast(`Simulation active : ${PERM_ROLE_LABELS[role]}`, 'warn');
   nav(Permissions.getDefaultPage());
 }
 
 async function ppStopSimulation() {
   if (!_pp.viewAsReal) return;
-
-  profile          = { ..._pp.viewAsReal };
-  _pp.viewAsReal   = null;
-
+  profile        = { ..._pp.viewAsReal };
+  _pp.viewAsReal = null;
   await Permissions.load();
   if (typeof initUI === 'function') initUI();
-
   $('view-as-banner').style.display = 'none';
   $('view-as-stop').style.display   = 'none';
   $('view-as-select').value         = '';
-
   nav('permissions');
   toast('Retour au mode Administrateur', 'ok');
 }
 
-// ── JOURNAL D'AUDIT ──────────────────────────────────────────────
+// ── JOURNAL D'AUDIT ───────────────────────────────────────────────
 
 async function _ppRenderLogs() {
   const container = $('pp-content-logs');
   const logs      = await Permissions.getChangeLog(50);
-
   container.innerHTML = `
-    <div class="pp-logs-table">
+    <div class="pp-table-wrap">
       <div class="pp-logs-head">
-        <div>Action</div>
-        <div>Cible</div>
-        <div>Auteur</div>
+        <div>Action</div><div>Cible</div><div>Auteur</div>
         <div style="text-align:right;">Date</div>
       </div>
       ${logs.length ? logs.map(l => `
         <div class="pp-logs-row">
           <div>
-            <span class="pp-logs-action ${l.action === 'granted' ? 'granted' : 'revoked'}">
+            <span class="pp-log-action ${l.action === 'granted' ? 'granted' : 'revoked'}">
               ${l.action === 'granted' ? '✓ Accordé' : '✕ Révoqué'}
             </span>
           </div>
-          <div style="color:#94a3b8; font-weight:600;">
+          <div style="font-weight:600;">
             ${l.permission}
-            <span style="color:#334155; font-weight:400;"> — ${l.role}</span>
+            <span style="color:var(--text-3); font-weight:400;"> — ${l.role}</span>
           </div>
-          <div style="color:#64748b; font-weight:700;">${l.admin_nom}</div>
-          <div style="text-align:right; color:#334155;">${fmt(l.created_at)}</div>
-        </div>
-      `).join('') : '<div class="pp-empty">Aucun historique disponible</div>'}
-    </div>
-  `;
+          <div style="color:var(--text-2); font-weight:600;">${l.admin_nom}</div>
+          <div style="text-align:right; color:var(--text-3);">${fmt(l.created_at)}</div>
+        </div>`).join('')
+      : `<div style="padding:40px; text-align:center; color:var(--text-3); font-size:14px;">
+           Aucun historique disponible.
+         </div>`}
+    </div>`;
 }
