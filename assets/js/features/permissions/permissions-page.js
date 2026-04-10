@@ -11,7 +11,6 @@ const PERM_ROLE_LABELS = {
   'copropriétaire': 'Résident / Copro',
 };
 
-// Mapping des modules pour l'affichage UI
 const PERM_MODULE_LABELS = {
   dashboard:   'Tableau de bord',
   tickets:     'Signalements',
@@ -35,11 +34,14 @@ let _pp = {
  */
 export async function renderPermissionsPage() {
   const page = document.getElementById('page');
+  if (!page) return;
+
+  // Accès : Admin/Syndic pour modifier, ou CS pour consulter ses nouveaux droits
+  const canAccess = (typeof isAdmin === 'function' && isAdmin()) || profile?.role === 'membre_cs';
   
-  // Seul l'Admin ou le Syndic gère les droits, mais le CS peut consulter
-  if (typeof isAdmin === 'function' && !isAdmin() && profile?.role !== 'membre_cs') { 
-    nav('dashboard'); 
-    return; 
+  if (!canAccess) {
+    if (typeof nav === 'function') nav('dashboard');
+    return;
   }
 
   page.innerHTML = `
@@ -67,31 +69,31 @@ export async function renderPermissionsPage() {
     </div>
 
     <div id="pp-content-matrix">
-       <div class="d-flex gap-2 mb-3 align-items-center">
-         <span class="text-3 fw-bold" style="font-size:11px; text-transform:uppercase">Édition du rôle :</span>
-         ${PERM_ROLES_LIST.map(r => `
-            <button class="btn btn-xs ${r === _pp.activeRole ? 'btn-primary' : 'btn-secondary'}" 
-                    onclick="ppSelectRole('${r}')">
-              ${PERM_ROLE_LABELS[r]}
-            </button>
-         `).join('')}
-       </div>
+        <div class="d-flex gap-2 mb-3 align-items-center">
+          <span class="text-3 fw-bold" style="font-size:11px; text-transform:uppercase">Édition du rôle :</span>
+          ${PERM_ROLES_LIST.map(r => `
+             <button class="btn btn-xs ${r === _pp.activeRole ? 'btn-primary' : 'btn-secondary'}" 
+                     onclick="ppSelectRole('${r}')">
+               ${PERM_ROLE_LABELS[r]}
+             </button>
+          `).join('')}
+        </div>
 
-       <div class="card">
-         <div class="tbl-wrap">
-           <table id="pp-matrix-table">
-             <thead>
-               <tr>
-                 <th>Module & Fonctionnalité</th>
-                 <th class="text-center" style="width:100px">Accès</th>
-               </tr>
-             </thead>
-             <tbody id="pp-matrix-body">
-               <tr><td colspan="2" class="text-center py-5"><div class="spin"></div></td></tr>
-             </tbody>
-           </table>
-         </div>
-       </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table id="pp-matrix-table">
+              <thead>
+                <tr>
+                  <th>Module & Fonctionnalité</th>
+                  <th class="text-center" style="width:100px">Accès</th>
+                </tr>
+              </thead>
+              <tbody id="pp-matrix-body">
+                <tr><td colspan="2" class="text-center py-5"><div class="spin"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
     </div>
   </div>
   `;
@@ -106,12 +108,12 @@ export async function renderPermissionsPage() {
 async function _ppRenderMatrix() {
   const tbody = document.getElementById('pp-matrix-body');
   const role = _pp.activeRole;
-  
+  if (!tbody) return;
+
   if (!_pp.rolePerms[role]) {
     _pp.rolePerms[role] = await Permissions.getPermissionsForRole(role);
   }
 
-  // Groupement par module
   const byModule = {};
   _pp.catalog.forEach(p => {
     if (!byModule[p.module]) byModule[p.module] = [];
@@ -122,10 +124,9 @@ async function _ppRenderMatrix() {
   Object.entries(byModule).forEach(([modId, perms]) => {
     const modLabel = PERM_MODULE_LABELS[modId] || modId;
     
-    // Header de section (Module)
     html += `
       <tr style="background: var(--surface-2)">
-        <td colspan="2"><strong class="text-primary">${modLabel.toUpperCase()}</strong></td>
+        <td colspan="2"><strong class="text-primary" style="font-size:11px; letter-spacing:0.05em;">${modLabel.toUpperCase()}</strong></td>
       </tr>
     `;
 
@@ -153,30 +154,24 @@ async function _ppRenderMatrix() {
 }
 
 /**
- * Mise à jour d'une permission
+ * Logique Globale attachée à window pour les appels onclick
  */
-async function ppTogglePerm(role, permId, targetState) {
+window.ppSelectRole = function(role) {
+  _pp.activeRole = role;
+  renderPermissionsPage();
+};
+
+window.ppTogglePerm = async function(role, permId, targetState) {
   const ok = await Permissions.setPermission(role, permId, targetState);
   if (ok) {
     _pp.rolePerms[role][permId] = targetState;
-    toast(`Droits mis à jour pour ${PERM_ROLE_LABELS[role]}`, 'ok');
+    if (typeof toast === 'function') toast(`Droits mis à jour pour ${PERM_ROLE_LABELS[role]}`, 'ok');
   } else {
-    toast('Erreur lors de la sauvegarde', 'err');
-    _ppRenderMatrix(); // Reset UI
+    if (typeof toast === 'function') toast('Erreur lors de la sauvegarde', 'err');
+    _ppRenderMatrix();
   }
-}
+};
 
-/**
- * Chargement du catalogue via Permissions.js
- */
 async function _ppLoadAll() {
   _pp.catalog = await Permissions.loadCatalog();
-}
-
-/**
- * Navigation simplifiée
- */
-function ppSelectRole(role) {
-  _pp.activeRole = role;
-  renderPermissionsPage(); // Re-render pour mettre à jour les boutons active
 }
