@@ -2600,12 +2600,17 @@ tbody tr:hover td { background: var(--bg); }
 
 /* --- 1. SÉCURITÉ ANTI-DÉBORDEMENT GLOBALE --- */
 
+/* --- 1. SÉCURITÉ ANTI-DÉBORDEMENT GLOBALE --- */
 html, body {
   max-width: 100vw !important;
   overflow-x: hidden !important;
-  overscroll-behavior-y: contain; /* Bloque le rafraîchissement natif sensible */
+  /* Le body respire, le scroll vers le bas refonctionne parfaitement */
 }
 
+/* ANTI-SCROLL BLEED : Empêche le fond de bouger quand on scrolle dans le menu mobile */
+#sidebar {
+  overscroll-behavior-y: contain; 
+}
 /* Empêche TOUS les éléments flex/grid de forcer la largeur et de casser l'écran */
 * {
   min-width: 0;
