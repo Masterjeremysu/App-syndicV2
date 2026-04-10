@@ -11,6 +11,7 @@ const PERM_ROLE_LABELS = {
   'copropriétaire': 'Résident / Copro',
 };
 
+// Mapping des modules pour l'affichage UI
 const PERM_MODULE_LABELS = {
   dashboard:   'Tableau de bord',
   tickets:     'Signalements',
@@ -36,8 +37,9 @@ export async function renderPermissionsPage() {
   const page = document.getElementById('page');
   if (!page) return;
 
-  // Accès : Admin/Syndic pour modifier, ou CS pour consulter ses nouveaux droits
-  const canAccess = (typeof isAdmin === 'function' && isAdmin()) || profile?.role === 'membre_cs';
+  // Accès autorisé pour Admin, Syndic ou Membre CS (Consultation)
+  const userRole = typeof profile !== 'undefined' ? profile.role : null;
+  const canAccess = (typeof isAdmin === 'function' && isAdmin()) || userRole === 'membre_cs';
   
   if (!canAccess) {
     if (typeof nav === 'function') nav('dashboard');
@@ -46,7 +48,6 @@ export async function renderPermissionsPage() {
 
   page.innerHTML = `
   <div class="page-enter">
-    
     <div class="ph d-flex justify-content-between align-items-start mb-4">
       <div>
         <h1>🛡️ Gouvernance & Permissions</h1>
@@ -64,8 +65,8 @@ export async function renderPermissionsPage() {
 
     <div class="dash2-focusbar mb-4">
       <button class="dash2-chip active" onclick="ppSwitchTab(this, 'matrix')">📊 Matrice des droits</button>
-      <button class="dash2-chip" onclick="ppSwitchTab(this, 'emergency')">🚨 Verrous d'urgence</button>
-      <button class="dash2-chip" onclick="ppSwitchTab(this, 'logs')">📜 Historique d'audit</button>
+      <button class="dash2-chip" onclick="toast('Fonctionnalité restreinte', 'info')">🚨 Verrous d'urgence</button>
+      <button class="dash2-chip" onclick="toast('Historique disponible en base', 'info')">📜 Historique d'audit</button>
     </div>
 
     <div id="pp-content-matrix">
@@ -95,8 +96,7 @@ export async function renderPermissionsPage() {
           </div>
         </div>
     </div>
-  </div>
-  `;
+  </div>`;
 
   await _ppLoadAll();
   _ppRenderMatrix();
@@ -110,7 +110,7 @@ async function _ppRenderMatrix() {
   const role = _pp.activeRole;
   if (!tbody) return;
 
-  if (!_pp.rolePerms[role]) {
+  if (typeof Permissions !== 'undefined') {
     _pp.rolePerms[role] = await Permissions.getPermissionsForRole(role);
   }
 
@@ -127,8 +127,7 @@ async function _ppRenderMatrix() {
     html += `
       <tr style="background: var(--surface-2)">
         <td colspan="2"><strong class="text-primary" style="font-size:11px; letter-spacing:0.05em;">${modLabel.toUpperCase()}</strong></td>
-      </tr>
-    `;
+      </tr>`;
 
     perms.forEach(p => {
       const isOn = _pp.rolePerms[role]?.[p.id] === true;
@@ -145,8 +144,7 @@ async function _ppRenderMatrix() {
                      onclick="ppTogglePerm('${role}', '${p.id}', ${!isOn})">
             </div>
           </td>
-        </tr>
-      `;
+        </tr>`;
     });
   });
 
@@ -154,7 +152,7 @@ async function _ppRenderMatrix() {
 }
 
 /**
- * Logique Globale attachée à window pour les appels onclick
+ * Exposition des fonctions globales pour les appels HTML
  */
 window.ppSelectRole = function(role) {
   _pp.activeRole = role;
@@ -162,16 +160,17 @@ window.ppSelectRole = function(role) {
 };
 
 window.ppTogglePerm = async function(role, permId, targetState) {
-  const ok = await Permissions.setPermission(role, permId, targetState);
-  if (ok) {
-    _pp.rolePerms[role][permId] = targetState;
-    if (typeof toast === 'function') toast(`Droits mis à jour pour ${PERM_ROLE_LABELS[role]}`, 'ok');
-  } else {
-    if (typeof toast === 'function') toast('Erreur lors de la sauvegarde', 'err');
-    _ppRenderMatrix();
+  if (typeof Permissions !== 'undefined') {
+    const ok = await Permissions.setPermission(role, permId, targetState);
+    if (ok) {
+      _pp.rolePerms[role][permId] = targetState;
+      if (typeof toast === 'function') toast(`Droits mis à jour pour ${PERM_ROLE_LABELS[role]}`, 'ok');
+    }
   }
 };
 
 async function _ppLoadAll() {
-  _pp.catalog = await Permissions.loadCatalog();
+  if (typeof Permissions !== 'undefined') {
+    _pp.catalog = await Permissions.loadCatalog();
+  }
 }
