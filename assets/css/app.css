@@ -2739,12 +2739,17 @@ html, body {
   .bn-signaler-ico {
     width: 52px; height: 52px;
     transform: translateY(-16px);
-    border: 4px solid var(--surface); /* Effet d'incrustation */
+    background: var(--accent) !important; /* FORCE LE FOND BLEU */
+    border: 4px solid var(--surface);
     box-shadow: 0 8px 20px rgba(37,99,235,0.4);
+  }
+  /* On force l'icône à l'intérieur à être parfaitement blanche */
+  .bn-signaler-ico svg {
+    stroke: #ffffff !important;
+    fill: none !important;
   }
   [data-theme="dark"] .bn-signaler-ico { border-color: #1c1b19; }
   .bn-signaler:active .bn-signaler-ico { transform: translateY(-16px) scale(0.92); }
-
   /* ── TABLEAUX TRANSFORMÉS EN CARTES ── */
   .tbl-wrap table thead { display: none; }
   .tbl-wrap table, .tbl-wrap tbody, .tbl-wrap tr, .tbl-wrap td { display: block; width: 100%; }
