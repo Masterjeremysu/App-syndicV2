@@ -11,7 +11,6 @@ const PERM_ROLE_LABELS = {
   'copropriétaire': 'Résident / Copro',
 };
 
-// Mapping des modules pour l'affichage UI
 const PERM_MODULE_LABELS = {
   dashboard:   'Tableau de bord',
   tickets:     'Signalements',
@@ -31,13 +30,13 @@ let _pp = {
 };
 
 /**
- * Rendu Principal - Utilise les classes .ph et .dash2-chip de app.css
+ * Rendu Principal - Utilise les classes .ph, .card et .dash2-chip de app.css
  */
-export async function renderPermissionsPage() {
+async function renderPermissionsPage() {
   const page = document.getElementById('page');
   if (!page) return;
 
-  // Accès autorisé pour Admin, Syndic ou Membre CS (Consultation)
+  // Accès autorisé pour Admin, Syndic ou Membre CS (Consultation/Action)
   const userRole = typeof profile !== 'undefined' ? profile.role : null;
   const canAccess = (typeof isAdmin === 'function' && isAdmin()) || userRole === 'membre_cs';
   
@@ -51,38 +50,27 @@ export async function renderPermissionsPage() {
     <div class="ph d-flex justify-content-between align-items-start mb-4">
       <div>
         <h1>🛡️ Gouvernance & Permissions</h1>
-        <p>Gérez les accès aux données. Note : Le Conseil Syndical a désormais un accès étendu au Registre.</p>
+        <p>Gérez les accès aux modules. Le Conseil Syndical peut désormais interagir avec le Registre.</p>
       </div>
       
       <div class="card p-2 d-flex flex-row align-items-center gap-2" style="background: var(--surface-2); border-radius: var(--r-md);">
-        <span class="text-3 fw-bold px-2" style="font-size:11px">MODE TEST :</span>
-        <select id="view-as-select" class="select py-1" style="width:160px; font-size:12px" onchange="ppSimulateAs(this.value)">
-          <option value="">— Simuler un profil —</option>
-          ${PERM_ROLES_LIST.map(r => `<option value="${r}">${PERM_ROLE_LABELS[r]}</option>`).join('')}
+        <span class="text-3 fw-bold px-2" style="font-size:11px">RÔLE CONFIGURÉ :</span>
+        <select id="pp-role-select" class="select py-1" style="width:160px; font-size:12px" onchange="ppSelectRole(this.value)">
+          ${PERM_ROLES_LIST.map(r => `<option value="${r}" ${r === _pp.activeRole ? 'selected' : ''}>${PERM_ROLE_LABELS[r]}</option>`).join('')}
         </select>
       </div>
     </div>
 
     <div class="dash2-focusbar mb-4">
-      <button class="dash2-chip active" onclick="ppSwitchTab(this, 'matrix')">📊 Matrice des droits</button>
-      <button class="dash2-chip" onclick="toast('Fonctionnalité restreinte', 'info')">🚨 Verrous d'urgence</button>
-      <button class="dash2-chip" onclick="toast('Historique disponible en base', 'info')">📜 Historique d'audit</button>
+      <button class="dash2-chip active">📊 Matrice des droits</button>
+      <button class="dash2-chip" onclick="toast('Bientôt disponible', 'info')">🚨 Verrous</button>
+      <button class="dash2-chip" onclick="toast('Consultez le Journal', 'info')">📜 Audit</button>
     </div>
 
     <div id="pp-content-matrix">
-        <div class="d-flex gap-2 mb-3 align-items-center">
-          <span class="text-3 fw-bold" style="font-size:11px; text-transform:uppercase">Édition du rôle :</span>
-          ${PERM_ROLES_LIST.map(r => `
-             <button class="btn btn-xs ${r === _pp.activeRole ? 'btn-primary' : 'btn-secondary'}" 
-                     onclick="ppSelectRole('${r}')">
-               ${PERM_ROLE_LABELS[r]}
-             </button>
-          `).join('')}
-        </div>
-
         <div class="card">
           <div class="tbl-wrap">
-            <table id="pp-matrix-table">
+            <table>
               <thead>
                 <tr>
                   <th>Module & Fonctionnalité</th>
@@ -152,11 +140,11 @@ async function _ppRenderMatrix() {
 }
 
 /**
- * Exposition des fonctions globales pour les appels HTML
+ * Fonctions globales pour les interactions onclick
  */
 window.ppSelectRole = function(role) {
   _pp.activeRole = role;
-  renderPermissionsPage();
+  _ppRenderMatrix();
 };
 
 window.ppTogglePerm = async function(role, permId, targetState) {
@@ -164,7 +152,7 @@ window.ppTogglePerm = async function(role, permId, targetState) {
     const ok = await Permissions.setPermission(role, permId, targetState);
     if (ok) {
       _pp.rolePerms[role][permId] = targetState;
-      if (typeof toast === 'function') toast(`Droits mis à jour pour ${PERM_ROLE_LABELS[role]}`, 'ok');
+      if (typeof toast === 'function') toast('Permission mise à jour', 'ok');
     }
   }
 };
@@ -174,3 +162,6 @@ async function _ppLoadAll() {
     _pp.catalog = await Permissions.loadCatalog();
   }
 }
+
+// Export pour le routeur
+window.renderPermissionsPage = renderPermissionsPage;
