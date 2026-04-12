@@ -194,7 +194,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.22 1.18a2 2 0 012-2.18h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
       Contacts & Urgences
     </a>
-    <a class="nav-item" onclick="nav('registre')">
+    <a class="nav-item" data-page="registre" onclick="nav('registre')">
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
     <polyline points="14 2 14 8 20 8"></polyline>
@@ -608,7 +608,7 @@
 
   <script src="assets/js/core/config.js" defer></script>
   <script src="assets/js/core/state.js" defer></script>
-  <script src="assets/js/core/permissions.js" defer></script>
+  <script src="assets/js/core/permissions.js?v=20260412b" defer></script>
   <script src="assets/js/core/helpers.js" defer></script>
   <script src="assets/js/features/auth/auth.js" defer></script>
   <script src="assets/js/core/app-start.js" defer></script>
@@ -635,6 +635,7 @@
   <script src="assets/js/features/register/register-page.js" defer></script>
   <script src="assets/js/features/reports/rapport.js" defer></script>
   <script src="assets/js/features/mobile/mobile-interactions.js" defer></script>
+  <script src="assets/js/features/mobile/mobile-shell.js" defer></script>
   <script src="assets/js/services/pwa.js" defer></script>
   <script src="assets/js/features/annonces/annonces.js" defer></script>
   <script src="assets/js/features/agenda/agenda.js" defer></script>
@@ -644,14 +645,11 @@
   <script src="assets/js/features/registre/registre-data.js" defer></script>
   <script src="assets/js/features/registre/registre.js" defer></script>
   <script src="assets/js/features/faq/faq.js" defer></script>
-  <script src="assets/js/features/permissions/permissions-page.js" defer></script>
+  <script src="assets/js/features/permissions/permissions-page.js?v=20260412b" defer></script>
   <script src="assets/js/features/onboarding/onboarding.js" defer></script>
   <script src="assets/js/features/documents/documents.js" defer></script>
   <script src="assets/js/features/votes/votes.js" defer></script>
   <script src="assets/js/features/messages/messages.js" defer></script>
   <script src="assets/js/core/bootstrap-session.js" defer></script>
-  <script src="assets/js/mobile-android-patch.js" defer></script>
-  <script src="assets/js/mobile-android-patch-v2.js" defer></script>
-  <script src="assets/js/mobile-android-patch-v3.js" defer></script>
 </body>
 </html>
