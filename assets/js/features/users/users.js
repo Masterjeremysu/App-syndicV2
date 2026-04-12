@@ -68,6 +68,113 @@ async function renderUsers() {
   
   page.innerHTML = `
   <div style="padding:24px; max-width:1100px; margin:0 auto; animation:fade-in 0.2s ease;">
+    <style>
+      .users-table-head {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-2);
+        display: grid;
+        grid-template-columns: 2.5fr 1.5fr 1fr auto;
+        gap: 16px;
+        align-items: center;
+      }
+      .users-table-head > div {
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: var(--text-3);
+      }
+      .users-table-head > div:last-child {
+        text-align: right;
+      }
+      .users-row {
+        padding: 16px 20px;
+        display: grid;
+        grid-template-columns: 2.5fr 1.5fr 1fr auto;
+        gap: 16px;
+        align-items: center;
+        background: var(--bg-1);
+        transition: background 0.2s;
+      }
+      .users-main-col,
+      .users-role-col,
+      .users-contact-col,
+      .users-actions-col {
+        min-width: 0;
+      }
+      .users-main-col {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .users-role-col {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .users-contact-line {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-2);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .users-contact-col > div {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-2);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .users-actions-col {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+      }
+      @media (max-width: 768px) {
+        .users-table-head {
+          display: none;
+        }
+        .users-row {
+          grid-template-columns: 1fr;
+          gap: 14px;
+          padding: 18px 16px;
+        }
+        .users-role-col,
+        .users-contact-col,
+        .users-actions-col {
+          padding-top: 12px;
+          border-top: 1px solid var(--border);
+        }
+        .users-role-col select,
+        .users-actions-col button,
+        .users-role-col .select {
+          width: 100% !important;
+        }
+        .users-actions-col {
+          align-items: stretch;
+        }
+        .users-actions-col > div {
+          text-align: left;
+        }
+        .users-contact-line {
+          white-space: normal;
+          overflow: visible;
+          text-overflow: initial;
+          word-break: break-word;
+        }
+        .users-contact-col > div {
+          white-space: normal !important;
+          overflow: visible !important;
+          text-overflow: initial !important;
+          word-break: break-word;
+        }
+      }
+    </style>
     <div style="margin-bottom:24px; padding-bottom:20px; border-bottom:1px solid var(--border);">
       <div style="font-size:11px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--primary); margin-bottom:8px; display:flex; align-items:center; gap:8px;">
         <span style="display:inline-block; width:24px; height:2px; background:var(--primary); border-radius:2px;"></span>
@@ -156,6 +263,10 @@ async function renderUsers() {
       
     </div>
   </div>`;
+
+  const usersSurface = page.querySelector('#users-list-container')?.parentElement;
+  const usersHead = usersSurface?.children?.[0];
+  if (usersHead) usersHead.classList.add('users-table-head');
 
   // Construction de l'URL d'inscription
   const registerUrl = `${window.location.origin}${window.location.pathname}?register=1`;
@@ -280,15 +391,9 @@ function renderUsersList() {
     const isMe = u.id === (typeof user !== 'undefined' ? user.id : '');
 
     return `
-    <div style="
-      padding:16px 20px;
-      border-bottom:${i < filtered.length - 1 ? '1px solid var(--border)' : 'none'};
-      display:grid; grid-template-columns:2.5fr 1.5fr 1fr auto;
-      gap:16px; align-items:center;
-      background:var(--bg-1); transition:background 0.2s;
-    " onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='var(--bg-1)'">
+    <div class="users-row" style="border-bottom:${i < filtered.length - 1 ? '1px solid var(--border)' : 'none'};" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='var(--bg-1)'">
 
-      <div style="display:flex; align-items:center; gap:14px; min-width:0;">
+      <div class="users-main-col">
         <div style="
           width:42px; height:42px; border-radius:12px; flex-shrink:0;
           background:${avColor}15; color:${avColor}; border:1px solid ${avColor}33;
@@ -309,7 +414,7 @@ function renderUsersList() {
         </div>
       </div>
 
-      <div style="display:flex; flex-direction:column; gap:6px;">
+      <div class="users-role-col">
         ${!isMe && isAdminUser ? `
         <select class="select" style="font-size:12px; font-weight:600; padding:4px 8px; border-radius:6px; width:fit-content; border-color:${rColor}44; color:${rColor}; background:${rColor}08;" onchange="changeRole('${u.id}', this.value, '${safeNom}')">
           ${['copropriétaire','membre_cs','syndic','administrateur'].map(r => `<option value="${r}" ${r===u.role?'selected':''}>${roleL[r]}</option>`).join('')}
@@ -326,12 +431,12 @@ function renderUsersList() {
         `}
       </div>
 
-      <div style="min-width:0;">
+      <div class="users-contact-col">
         <div style="font-size:12px; font-weight:500; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:4px;" title="${u.email}">✉️ ${u.email}</div>
         ${u.telephone ? `<div style="font-size:12px; font-weight:500; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📞 ${escHtml(u.telephone)}</div>` : ''}
       </div>
 
-      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+      <div class="users-actions-col">
         <div style="font-size:11px; color:var(--text-3); font-weight:500;">
           Inscrit le ${typeof fmtD === 'function' ? fmtD(u.created_at) : new Date(u.created_at).toLocaleDateString()}
         </div>
