@@ -1,34 +1,8 @@
-function generateQR(url) {
-  const container = $('qr-container');
-  if (!container) return;
-
-  // Charge qrcode.js depuis CDN
-  const script = document.createElement('script');
-  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
-  script.onload = () => {
-    container.innerHTML = '';
-    new QRCode(container, {
-      text: url,
-      width: 160,
-      height: 160,
-      colorDark: '#1a1917',
-      colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.H
-    });
-    // Ajoute logo au centre
-    setTimeout(() => {
-      const img = container.querySelector('img') || container.querySelector('canvas');
-      if (img) {
-        img.style.borderRadius = '12px';
-        img.style.border = '4px solid var(--border)';
-      }
-    }, 100);
-  };
-  document.head.appendChild(script);
-}
-
 function printQR() {
   const registerUrl = `${window.location.origin}${window.location.pathname}?register=1`;
+  // On construit l'URL complète du logo pour que la nouvelle fenêtre le trouve
+  const logoUrl = `${window.location.origin}/icon-512.png`; 
+  
   const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html>
 <html lang="fr">
@@ -86,7 +60,7 @@ function printQR() {
     border-radius: 20px; padding: 4px 14px;
     font-size: 9pt; font-weight: 600; color: rgba(99,149,255,.9);
     letter-spacing: .08em; text-transform: uppercase;
-    margin-bottom: 8mm; /* Ajusté pour laisser place au logo */
+    margin-bottom: 8mm;
   }
   .top-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: #3b82f6; }
 
@@ -133,7 +107,7 @@ function printQR() {
   /* QR Frame */
   .qr-frame {
     background: #fff;
-    border-radius: 12mm; padding: 10mm 8mm 8mm; /* Ajustement du padding haut pour la respiration */
+    border-radius: 12mm; padding: 10mm 8mm 8mm;
     box-shadow:
       0 0 0 1px rgba(255,255,255,.1),
       0 8mm 24mm rgba(0,0,0,.6),
@@ -152,10 +126,10 @@ function printQR() {
   /* LABEL DORÉ */
   .qr-label {
     font-size: 9pt; font-weight: 800; 
-    color: #c59b27; /* Doré optimisé pour l'impression sur blanc */
+    color: #c59b27;
     text-transform: uppercase; letter-spacing: .12em;
     margin-bottom: 6mm; text-align: center;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.15); /* Légère ombre pour le contraste */
+    text-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
   
   #qr-print { display: flex; justify-content: center; margin-bottom: 2mm; }
@@ -220,7 +194,7 @@ function printQR() {
       Résidence le Floréal · Sassenage
     </div>
 
-    <img src="/icon-513.png" alt="Logo CoproSync" class="app-logo" onerror="this.style.display='none'">
+    <img src="${logoUrl}" alt="Logo CoproSync" class="app-logo" onerror="this.style.display='none'">
 
     <div class="hero">
       <div class="hero-eyebrow">Votre résidence numérique</div>
@@ -287,11 +261,10 @@ function printQR() {
       colorLight: '#ffffff',
       correctLevel: QRCode.CorrectLevel.H
     });
-    setTimeout(() => window.print(), 1200);
+    // J'ai mis 1500ms pour laisser le temps au logo PNG de bien se charger avant l'impression
+    setTimeout(() => window.print(), 1500); 
   };
 <\/script>
 </body></html>`);
   win.document.close();
 }
-
-// ── PAGE D'INSCRIPTION (accessible sans connexion) ──
