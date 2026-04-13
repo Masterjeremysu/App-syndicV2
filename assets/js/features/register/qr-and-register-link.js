@@ -220,7 +220,7 @@ function printQR() {
       Résidence le Floréal · Sassenage
     </div>
 
-    <img src="/icon-512.ico" alt="Logo CoproSync" class="app-logo" onerror="this.style.display='none'">
+    <img src="/icon-512.png" alt="Logo CoproSync" class="app-logo" onerror="this.style.display='none'">
 
     <div class="hero">
       <div class="hero-eyebrow">Votre résidence numérique</div>
