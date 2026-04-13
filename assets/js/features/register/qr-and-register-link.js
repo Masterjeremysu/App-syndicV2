@@ -86,9 +86,18 @@ function printQR() {
     border-radius: 20px; padding: 4px 14px;
     font-size: 9pt; font-weight: 600; color: rgba(99,149,255,.9);
     letter-spacing: .08em; text-transform: uppercase;
-    margin-bottom: 10mm;
+    margin-bottom: 8mm;
   }
   .top-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: #3b82f6; }
+
+  /* Logo App */
+  .app-logo {
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    margin-bottom: 4mm;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+  }
 
   /* Hero text */
   .hero { text-align: center; margin-bottom: 10mm; }
@@ -139,17 +148,17 @@ function printQR() {
     background: linear-gradient(135deg, rgba(59,130,246,.3), rgba(129,140,248,.2), rgba(16,185,129,.15));
     z-index: -1;
   }
+  
+  /* LABEL DORÉ */
   .qr-label {
-    font-size: 8pt; font-weight: 700; color: #9b9890;
+    font-size: 9pt; font-weight: 800; 
+    color: #d4af37; /* Couleur dorée métallique */
     text-transform: uppercase; letter-spacing: .12em;
     margin-bottom: 5mm; text-align: center;
+    text-shadow: 0 2px 4px rgba(212, 175, 55, 0.2);
   }
+  
   #qr-print { display: flex; justify-content: center; }
-  .qr-url {
-    margin-top: 4mm; font-size: 7.5pt; color: #9b9890;
-    font-family: monospace; word-break: break-all; text-align: center;
-    max-width: 60mm;
-  }
 
   /* Steps */
   .steps {
@@ -206,13 +215,13 @@ function printQR() {
 
   <div class="content">
 
-    <!-- Badge top -->
     <div class="top-badge">
       <div class="top-badge-dot"></div>
       Résidence le Floréal · Sassenage
     </div>
 
-    <!-- Hero -->
+    <img src="/icon-513.ico" alt="Logo CoproSync" class="app-logo" onerror="this.style.display='none'">
+
     <div class="hero">
       <div class="hero-eyebrow">Votre résidence numérique</div>
       <div class="hero-title">Rejoignez<br><em>CoproSync</em></div>
@@ -225,14 +234,11 @@ function printQR() {
       <div class="divider-line"></div>
     </div>
 
-    <!-- QR Code -->
     <div class="qr-frame">
       <div class="qr-label">Scannez pour créer votre compte</div>
       <div id="qr-print"></div>
-      <div class="qr-url">${registerUrl}</div>
-    </div>
+      </div>
 
-    <!-- Steps -->
     <div class="steps">
       <div class="step">
         <div class="step-num">1</div>
@@ -251,7 +257,6 @@ function printQR() {
       </div>
     </div>
 
-    <!-- Features -->
     <div class="features">
       <div class="feature"><div class="feature-dot"></div>Signalements</div>
       <div class="feature"><div class="feature-dot"></div>Messagerie</div>
@@ -260,7 +265,6 @@ function printQR() {
       <div class="feature"><div class="feature-dot"></div>Agenda</div>
     </div>
 
-    <!-- Footer -->
     <div class="footer">
       <div>
         <div class="footer-brand">CoproSync</div>
@@ -289,5 +293,3 @@ function printQR() {
 </body></html>`);
   win.document.close();
 }
-
-// ── PAGE D'INSCRIPTION (accessible sans connexion) ──
